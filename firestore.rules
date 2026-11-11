@@ -1,0 +1,18 @@
+rules_version = '2';
+
+// Copy this into Firebase Console → Firestore Database → Rules → Publish.
+// Replace OWNER_EMAIL_HERE with the email you created in Firebase Authentication.
+// Everyone can READ the questions (so the app works for her),
+// but only the owner (logged in with that email) can CHANGE them.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /loveApp/config {
+      allow read: if true;
+      allow write: if request.auth != null
+                   && request.auth.token.email == "OWNER_EMAIL_HERE";
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
