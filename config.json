@@ -2,63 +2,105 @@
   "herName": "Baby",
   "intro": {
     "title": "Hey {name} 💕",
-    "text": "Sagar ke paas tumhare liye ek bahut zaroori sawal hai...",
-    "button": "Pucho na 🙈"
+    "text": "Mere paas tumhare liye ek bahut zaroori sawal hai...",
+    "button": "Ha bolo"
   },
   "questions": [
     {
       "text": "Do you love me? 💖",
       "options": [
-        { "label": "Yes 😍", "action": "happy" },
-        { "label": "No 🙄", "action": "next" }
+        {
+          "label": "Yes 😍",
+          "action": "happy"
+        },
+        {
+          "label": "No 🙄",
+          "action": "next"
+        }
       ],
       "happyMessage": "Love you baby ❤️"
     },
     {
       "text": "Ek baar aur soch lo 🥺",
       "options": [
-        { "label": "Haan bana liya ❤️", "action": "happy" },
-        { "label": "Soch liya, nahi banana boyfriend 😒", "action": "next" }
+        {
+          "label": "Haan bana liya ❤️",
+          "action": "happy"
+        },
+        {
+          "label": "Soch liya, nahi banana boyfriend 😒",
+          "action": "next"
+        }
       ],
       "happyMessage": "Mujhe pata tha 😌 Love you baby ❤️"
     },
     {
       "text": "Pakka? Itna cute boyfriend aur kahan milega? 🥹",
       "options": [
-        { "label": "Achha theek hai, love you ❤️", "action": "happy" },
-        { "label": "Haan pakka 🙄", "action": "next" }
+        {
+          "label": "Achha theek hai, love you ❤️",
+          "action": "happy"
+        },
+        {
+          "label": "Haan pakka 🙄",
+          "action": "next"
+        }
       ],
       "happyMessage": "Yayy! Love you baby ❤️"
     },
     {
       "text": "Roz good morning bolunga ☀️ aur chocolate bhi dunga 🍫",
       "options": [
-        { "label": "Deal! Love you ❤️", "action": "happy" },
-        { "label": "Phir bhi nahi 😝", "action": "next" }
+        {
+          "label": "Deal! Love you ❤️",
+          "action": "happy"
+        },
+        {
+          "label": "Phir bhi nahi 😝",
+          "action": "next"
+        }
       ],
       "happyMessage": "Chocolate pakki 🍫 Love you baby ❤️"
     },
     {
       "text": "Tumhari saari baatein sununga, kabhi naraz nahi karunga 🤞",
       "options": [
-        { "label": "Aww okay ❤️", "action": "happy" },
-        { "label": "Nahi 🙅‍♀️", "action": "next" }
+        {
+          "label": "Aww okay ❤️",
+          "action": "happy"
+        },
+        {
+          "label": "Nahi 🙅‍♀️",
+          "action": "next"
+        }
       ],
       "happyMessage": "Promise pakka 🤞 Love you baby ❤️"
     },
     {
       "text": "Main ro dunga sach mein 😭",
       "options": [
-        { "label": "Mat ro, love you ❤️", "action": "happy" },
-        { "label": "Ro lo 😜", "action": "next" }
+        {
+          "label": "Mat ro, love you ❤️",
+          "action": "happy"
+        },
+        {
+          "label": "Ro lo 😜",
+          "action": "next"
+        }
       ],
       "happyMessage": "Ab main khush hoon 🥰 Love you baby ❤️"
     },
     {
       "text": "Last chance! Do you love me? 💍",
       "options": [
-        { "label": "YES 😍❤️", "action": "happy" },
-        { "label": "No", "action": "next" }
+        {
+          "label": "YES 😍❤️",
+          "action": "happy"
+        },
+        {
+          "label": "No",
+          "action": "next"
+        }
       ],
       "happyMessage": "Love you baby ❤️ Hamesha 💞"
     }
@@ -68,6 +110,8 @@
   "replayButton": "Phir se shuru karo 🔁",
   "sadMessage": "Please ek baar aur soch lo 😢",
   "sadButton": "Theek hai, phir se poocho 🥺",
-  "song": { "url": "" },
+  "song": {
+    "url": ""
+  },
   "voice": true
 }
