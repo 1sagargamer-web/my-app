@@ -3,7 +3,7 @@
 Ek cute "Do you love me?" web app.
 
 - **Yes** → happy boy naachta hai, "Love you baby ❤️" bolta hai, song bajta hai, hearts udte hain.
-- **No** → har No pe naya, aur pyaara sawal, jab tak wo Yes na bole. Aakhri No pe sad boy, phir wapas shuru.
+- **No** → 💔 + sad music, boy please karta hai / rota hai (rain cloud ke neeche), aur naya sawal aata hai jab tak wo Yes na bole.
 - **Owner panel** (`admin.html`): password se khulta hai. Sawal, options, messages, song badlo → Save. Link hamesha chhota aur same rehta hai.
 
 Setup ke steps: [SETUP.md](SETUP.md)

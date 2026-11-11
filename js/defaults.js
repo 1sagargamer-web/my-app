@@ -38,8 +38,9 @@ export const DEFAULT_CONFIG = {
   replayButton: "Phir se shuru karo 🔁",
   sadMessage: "Please ek baar aur soch lo 😢",
   sadButton: "Theek hai, phir se poocho 🥺",
-  // Empty url = built-in happy tune.
+  // Empty url = built-in tune (happy on Yes, sad on No).
   song: { url: "" },
+  sadSong: { url: "" },
   // Boy says the happy message out loud (phone's voice).
   voice: true,
 };

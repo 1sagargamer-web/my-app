@@ -34,6 +34,6 @@ Token mushkil lage? Mujhe (Claude ko) chat mein bol do kaunsa sawal hatana/badal
 ### Tips
 - Har "No" pe agla sawal aata hai. Aakhri sawal pe bhi "No" kiya to sad boy aata hai, phir pehle sawal se shuru.
 - Har "No" ke baad "Yes" button thoda bada ho jata hai 😄
-- **Song:** apna mp3 repo ke `music` folder mein upload karo, admin mein `music/song.mp3` likho. Khaali = built-in tune.
+- **Songs:** Yes pe happy, No pe sad song bajta hai. Apna mp3 repo ke `music` folder mein upload karo, admin mein `music/happy.mp3` / `music/sad.mp3` likho. Khaali = built-in tune.
 - **Naam:** kisi bhi text mein `{name}` likho, wahan GF ka naam aa jayega.
 - Password aur token sirf aapke phone pe rehte hain. GF admin khol bhi le, to bina password aur token ke kuch save nahi kar sakti.

@@ -49,6 +49,7 @@ export function normalize(raw) {
     button: str(raw.intro?.button, d.intro.button),
   };
   c.song = { url: str(raw.song?.url, "").trim() };
+  c.sadSong = { url: str(raw.sadSong?.url, "").trim() };
   c.voice = typeof raw.voice === "boolean" ? raw.voice : d.voice;
   c.questions =
     Array.isArray(raw.questions) && raw.questions.length ? raw.questions.map(normQuestion) : d.questions;

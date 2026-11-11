@@ -96,24 +96,33 @@ function questionCard(q, i) {
   );
 }
 
-let testing = false;
-function songPanel() {
-  const testBtn = h("button", {
+let testing = null;
+function testButton(kind, label) {
+  const btn = h("button", {
     class: "chip", type: "button",
     onclick: () => {
-      if (testing) { music.stop(); testing = false; testBtn.textContent = "▶ Song test karo"; return; }
-      music.play(cfg.song.url.trim());
-      testing = true;
-      testBtn.textContent = "⏹ Stop";
+      if (testing === kind) { music.stop(); testing = null; btn.textContent = label; return; }
+      root.querySelectorAll(".song-test").forEach((b) => (b.textContent = b.dataset.label));
+      music.play(kind, (kind === "sad" ? cfg.sadSong : cfg.song).url.trim());
+      testing = kind;
+      btn.textContent = "⏹ Stop";
     },
-  }, "▶ Song test karo");
+  }, label);
+  btn.classList.add("song-test");
+  btn.dataset.label = label;
+  return btn;
+}
+
+function songPanel() {
   return h("div", { class: "panel" },
-    h("h2", {}, "🎵 Song"),
-    h("p", { class: "hint" }, "Khaali chhodo to built-in happy tune bajegi. Apna song: mp3 ka direct link daalo, ya mp3 file GitHub repo ke 'music' folder mein upload karke yahan likho: music/song.mp3"),
-    field("Song link (mp3)", cfg.song, "url", { placeholder: "music/song.mp3  ya  https://…/song.mp3" }),
+    h("h2", {}, "🎵 Songs"),
+    h("p", { class: "hint" }, "Khaali chhodo to built-in tune bajegi. Apna song: mp3 ka direct link daalo, ya mp3 file GitHub repo ke 'music' folder mein upload karke yahan likho, jaise: music/happy.mp3"),
+    field("💖 Yes pe happy song (mp3)", cfg.song, "url", { placeholder: "music/happy.mp3  ya  https://…" }),
+    field("💔 No pe sad song (mp3)", cfg.sadSong, "url", { placeholder: "music/sad.mp3  ya  https://…" }),
     h("div", { class: "row" },
-      testBtn,
-      h("button", { class: "chip", type: "button", onclick: () => { cfg.song.url = ""; render(); toast("Default tune set — Save dabana mat bhoolna"); } }, "Default tune"),
+      testButton("happy", "▶ Happy test"),
+      testButton("sad", "▶ Sad test"),
+      h("button", { class: "chip", type: "button", onclick: () => { cfg.song.url = ""; cfg.sadSong.url = ""; render(); toast("Built-in tunes set — Save dabana mat bhoolna"); } }, "Built-in tunes"),
     ),
     h("h3", {}, "Awaaz"),
     h("label", { class: "toggle" },
