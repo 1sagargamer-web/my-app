@@ -24,7 +24,7 @@
       "text": "Ek baar aur soch lo 🥺",
       "options": [
         {
-          "label": "Haan bana liya ❤️",
+          "label": "Haan soch liya ❤️",
           "action": "happy"
         },
         {
@@ -103,11 +103,123 @@
         }
       ],
       "happyMessage": "Love you baby ❤️ Hamesha 💞"
+    },
+    {
+      "text": "Baby aapko kya chahiye batao ",
+      "options": [
+        {
+          "label": "Momoj 😍",
+          "action": "happy"
+        },
+        {
+          "label": "Kuch nhi 🙄",
+          "action": "next"
+        }
+      ],
+      "happyMessage": "Love you baby ❤️"
+    },
+    {
+      "text": "Oye tum jada bhao kha rhi ho",
+      "options": [
+        {
+          "label": "Ok jaan maan gyi",
+          "action": "happy"
+        },
+        {
+          "label": "Ha to kya karoge ",
+          "action": "next"
+        }
+      ],
+      "happyMessage": "Love you baby ❤️"
+    },
+    {
+      "text": "Maan jao baar baar bol rha hu ",
+      "options": [
+        {
+          "label": "Ha maan gyi baby",
+          "action": "happy"
+        },
+        {
+          "label": "Nahi maanungi",
+          "action": "next"
+        }
+      ],
+      "happyMessage": "Love you baby ❤️"
+    },
+    {
+      "text": "Itna handsome boy nhi milega aapko",
+      "options": [
+        {
+          "label": "Accha ji ok ",
+          "action": "happy"
+        },
+        {
+          "label": "Chahiye bhi nhi ",
+          "action": "next"
+        }
+      ],
+      "happyMessage": "Love you baby ❤️"
+    },
+    {
+      "text": "Oyeee tum mujhe reject karke pachtaoge ",
+      "options": [
+        {
+          "label": "Ok baby i ♥️ you",
+          "action": "happy"
+        },
+        {
+          "label": "Ha pher bhi nhi karungi ",
+          "action": "next"
+        }
+      ],
+      "happyMessage": "Love you baby ❤️"
+    },
+    {
+      "text": "Maan jao Banaras guma dunga ",
+      "options": [
+        {
+          "label": "Ok jaan chalo",
+          "action": "happy"
+        },
+        {
+          "label": "Akele chali jaungi ",
+          "action": "next"
+        }
+      ],
+      "happyMessage": "Love you baby ❤️"
+    },
+    {
+      "text": "Yaar ab to tumko maanta hi padega ",
+      "options": [
+        {
+          "label": "Ha jaan maan to gyi",
+          "action": "happy"
+        },
+        {
+          "label": "Kaise aisa kya karoge ",
+          "action": "next"
+        }
+      ],
+      "happyMessage": "Love you baby ❤️"
+    },
+    {
+      "text": "Ek option chuno tumhare mammi kasam ",
+      "options": [
+        {
+          "label": "I love you baby",
+          "action": "happy"
+        },
+        {
+          "label": "Option A Done",
+          "action": "happy"
+        }
+      ],
+      "happyMessage": "Love you baby ❤️"
     }
   ],
-  "happyTitle": "Yayyy! 🥰",
+  "happyTitle": "Yayyy! Kar diya na divana 🥰",
   "finalMessage": "Tum meri duniya ho, {name} 💞",
-  "replayButton": "Phir se shuru karo 🔁",
+  "replayButton": "Ab chat me aake love you bolo ",
   "sadMessage": "Please ek baar aur soch lo 😢",
   "sadButton": "Theek hai, phir se poocho 🥺",
   "song": {
