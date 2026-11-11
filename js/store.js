@@ -1,28 +1,22 @@
+// No server: the owner's settings travel inside the link (after #d=).
+// The owner's draft and password stay only on the owner's own phone.
 import { DEFAULT_CONFIG, DEFAULT_QUESTION } from "./defaults.js";
-import { firebaseConfig } from "./firebase-config.js";
 
 export { DEFAULT_CONFIG, DEFAULT_QUESTION };
 
-const SDK = "https://www.gstatic.com/firebasejs/10.12.2";
-const PREVIEW_KEY = "loveAppPreview";
+const DRAFT_KEY = "loveAppDraft";
+const PASS_KEY = "loveAppPass";
 const ACTIONS = ["happy", "retry", "sad"];
-
-export const isFirebaseReady = () =>
-  Boolean(firebaseConfig.apiKey && !firebaseConfig.apiKey.startsWith("PASTE") && firebaseConfig.projectId);
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const str = (v, fallback) => (typeof v === "string" ? v : fallback);
 
-function normOption(o, fallback) {
-  return {
-    label: str(o?.label, fallback?.label ?? "Option"),
-    action: ACTIONS.includes(o?.action) ? o.action : fallback?.action ?? "happy",
-  };
-}
-
 function normOptions(list, fallback) {
   if (!Array.isArray(list) || !list.length) return clone(fallback);
-  return list.map((o) => normOption(o));
+  return list.map((o) => ({
+    label: str(o?.label, "Option"),
+    action: ACTIONS.includes(o?.action) ? o.action : "happy",
+  }));
 }
 
 function normQuestion(q) {
@@ -59,78 +53,70 @@ export function normalize(raw) {
   return c;
 }
 
-// ---------- Firebase (loaded only when configured) ----------
+// ---------- link encoding ----------
 
-let core;
-async function fbCore() {
-  if (!core) {
-    core = (async () => {
-      const [{ initializeApp }, fs] = await Promise.all([
-        import(`${SDK}/firebase-app.js`),
-        import(`${SDK}/firebase-firestore.js`),
-      ]);
-      const app = initializeApp(firebaseConfig);
-      const db = fs.getFirestore(app);
-      return { app, db, fs, ref: fs.doc(db, "loveApp", "config") };
-    })();
-  }
-  return core;
+function toB64url(bytes) {
+  let s = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-let auth;
-async function fbAuth() {
-  if (!auth) {
-    auth = (async () => {
-      const { app } = await fbCore();
-      const a = await import(`${SDK}/firebase-auth.js`);
-      return { a, auth: a.getAuth(app) };
-    })();
-  }
-  return auth;
+function fromB64url(s) {
+  const bin = atob(s.replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(bin, (c) => c.charCodeAt(0));
 }
 
-const withTimeout = (p, ms) =>
-  Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]);
+const pipe = async (bytes, stream) => new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());
 
+export async function encodeConfig(cfg) {
+  const bytes = new TextEncoder().encode(JSON.stringify(normalize(cfg)));
+  if ("CompressionStream" in window) return "z" + toB64url(await pipe(bytes, new CompressionStream("deflate-raw")));
+  return "j" + toB64url(bytes);
+}
+
+export async function decodeConfig(s) {
+  let bytes = fromB64url(s.slice(1));
+  if (s[0] === "z") bytes = await pipe(bytes, new DecompressionStream("deflate-raw"));
+  return normalize(JSON.parse(new TextDecoder().decode(bytes)));
+}
+
+export async function makeShareLink(cfg) {
+  const url = new URL("./", location.href);
+  url.hash = "d=" + (await encodeConfig(cfg));
+  return url.toString();
+}
+
+// For the girlfriend's app: read settings from the link.
 export async function loadConfig() {
-  if (!isFirebaseReady()) {
+  const m = /[#&]d=([^&]+)/.exec(location.hash);
+  if (m) {
     try {
-      return normalize(JSON.parse(localStorage.getItem(PREVIEW_KEY)));
-    } catch {
-      return normalize(null);
+      return await decodeConfig(m[1]);
+    } catch (e) {
+      console.warn("Bad link data, using defaults", e);
     }
   }
-  try {
-    const { fs, ref } = await withTimeout(fbCore(), 10000);
-    const snap = await withTimeout(fs.getDoc(ref), 10000);
-    return normalize(snap.exists() ? snap.data() : null);
-  } catch (e) {
-    console.warn("Could not load from Firebase, using defaults", e);
-    return normalize(null);
-  }
+  return normalize(null);
 }
 
-export async function saveConfig(cfg) {
-  const data = normalize(cfg);
-  if (!isFirebaseReady()) {
-    localStorage.setItem(PREVIEW_KEY, JSON.stringify(data));
-    return;
-  }
-  const { fs, ref } = await fbCore();
-  await fs.setDoc(ref, { ...data, updatedAt: fs.serverTimestamp() });
-}
+// ---------- owner's draft + password (only on the owner's phone) ----------
 
-export async function adminSignIn(email, password) {
-  const { a, auth } = await fbAuth();
-  return a.signInWithEmailAndPassword(auth, email, password);
-}
+const read = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+const write = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} };
 
-export async function adminSignOut() {
-  const { a, auth } = await fbAuth();
-  return a.signOut(auth);
+export function loadDraft() {
+  try { return normalize(JSON.parse(read(DRAFT_KEY))); } catch { return normalize(null); }
 }
+export const saveDraft = (cfg) => write(DRAFT_KEY, JSON.stringify(normalize(cfg)));
 
-export async function onAdminAuth(cb) {
-  const { a, auth } = await fbAuth();
-  return a.onAuthStateChanged(auth, cb);
+async function hash(text) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("love-app:" + text));
+  return toB64url(new Uint8Array(buf));
+}
+export const hasPassword = () => Boolean(read(PASS_KEY));
+export const setPassword = async (p) => write(PASS_KEY, await hash(p));
+export const checkPassword = async (p) => (await hash(p)) === read(PASS_KEY);
+export function resetAll() {
+  write(PASS_KEY, null);
+  write(DRAFT_KEY, null);
 }

@@ -1,11 +1,11 @@
 import {
-  loadConfig, saveConfig, normalize, isFirebaseReady,
-  adminSignIn, adminSignOut, onAdminAuth, DEFAULT_QUESTION,
+  normalize, loadDraft, saveDraft, makeShareLink,
+  hasPassword, setPassword, checkPassword, resetAll, DEFAULT_QUESTION,
 } from "./store.js";
 import { Music } from "./music.js";
 
 const root = document.getElementById("root");
-const logoutBtn = document.getElementById("logout");
+const lockBtn = document.getElementById("lock");
 const toastEl = document.getElementById("toast");
 const music = new Music();
 let cfg;
@@ -118,7 +118,7 @@ function songPanel() {
     field("Song link (mp3)", cfg.song, "url", { placeholder: "music/song.mp3  ya  https://…/song.mp3" }),
     h("div", { class: "row" },
       testBtn,
-      h("button", { class: "chip", type: "button", onclick: () => { cfg.song.url = ""; render(); toast("Default tune set ho gayi — Save dabana mat bhoolna"); } }, "Default tune"),
+      h("button", { class: "chip", type: "button", onclick: () => { cfg.song.url = ""; render(); toast("Default tune set ho gayi — Link banana mat bhoolna"); } }, "Default tune"),
     ),
     h("h3", {}, "Awaaz"),
     h("label", { class: "toggle" },
@@ -128,16 +128,12 @@ function songPanel() {
   );
 }
 
-function render() {
-  const notice = isFirebaseReady()
-    ? null
-    : h("div", { class: "notice" },
-        h("strong", {}, "Preview mode: "),
-        "Firebase abhi set nahi hai, isliye changes sirf isi phone/browser mein save honge. GF ke phone pe dikhane ke liye SETUP.md ke steps follow karo.",
-      );
+const linkPanel = h("div", { class: "panel link-panel", hidden: true });
 
+function render() {
+  linkPanel.hidden = true;
   root.replaceChildren(
-    ...[notice,
+    ...[
       h("div", { class: "panel" },
         h("h2", {}, "💕 Basic"),
         field("Girlfriend ka naam", cfg, "herName"),
@@ -163,79 +159,108 @@ function render() {
       songPanel(),
       h("div", { class: "panel" },
         h("h2", {}, "⚙️ Reset"),
-        h("button", { class: "chip", type: "button", onclick: () => { if (confirm("Sab kuch default pe reset karein?")) { cfg = normalize(null); render(); toast("Reset ho gaya — Save dabao to pakka ho jayega"); } } }, "Sab default pe reset karo"),
+        h("button", { class: "chip", type: "button", onclick: () => { if (confirm("Sab kuch default pe reset karein?")) { cfg = normalize(null); render(); toast("Reset ho gaya — Link banao to pakka ho jayega"); } } }, "Sab default pe reset karo"),
       ),
+      linkPanel,
       h("div", { class: "savebar" }, saveBtn()),
-    ].filter(Boolean),
+    ],
   );
 }
 
 function saveBtn() {
-  const b = h("button", { class: "btn primary", type: "button" }, "💾 Save karo");
+  const b = h("button", { class: "btn primary", type: "button" }, "💌 Save karo + Link banao");
   b.addEventListener("click", async () => {
     b.disabled = true;
-    b.textContent = "Saving…";
     try {
-      await saveConfig(cfg);
-      toast(isFirebaseReady() ? "Save ho gaya ✅ GF ke app mein update ho gaya" : "Save ho gaya ✅ (sirf is browser mein)");
+      saveDraft(cfg);
+      showLink(await makeShareLink(cfg));
     } catch (e) {
       console.error(e);
-      const denied = String(e?.code || e).includes("permission");
-      toast(denied ? "Permission nahi mili ❌ firestore.rules mein apna email check karo" : "Save nahi hua ❌ Internet check karo", true);
+      toast("Link nahi ban paya ❌", true);
     } finally {
       b.disabled = false;
-      b.textContent = "💾 Save karo";
     }
   });
   return b;
 }
 
-function loginForm() {
-  const state = { email: "", password: "" };
-  const btn = h("button", { class: "btn primary", type: "submit" }, "Login 🔐");
+function showLink(url) {
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      toast("Link copy ho gaya ✅ ab GF ko bhej do");
+    } catch {
+      input.select();
+      toast("Link select ho gaya, copy kar lo");
+    }
+  };
+  const input = h("input", { value: url, readOnly: true, onclick: (e) => e.target.select(), "aria-label": "Link" });
+  const wa = `https://wa.me/?text=${encodeURIComponent("Tumhare liye kuch special hai 💖 " + url)}`;
+  linkPanel.replaceChildren(
+    h("h2", {}, "✅ Link ready hai!"),
+    h("p", { class: "hint" }, "Ye link GF ko bhejo. Baad mein kuch badloge to dobara 'Link banao' dabake naya link bhejna."),
+    h("label", { class: "field" }, input),
+    h("div", { class: "row" },
+      h("button", { class: "chip", type: "button", onclick: copy }, "📋 Copy"),
+      h("a", { class: "chip", href: wa, target: "_blank", rel: "noopener" }, "💬 WhatsApp"),
+      h("a", { class: "chip", href: url, target: "_blank", rel: "noopener" }, "👀 Dekho"),
+    ),
+  );
+  linkPanel.hidden = false;
+  linkPanel.scrollIntoView({ behavior: "smooth", block: "center" });
+  toast("Save ho gaya ✅ Link neeche hai");
+}
+
+function passwordForm() {
+  const isNew = !hasPassword();
+  const state = { p1: "", p2: "" };
   const form = h("form", {
     class: "panel login",
     onsubmit: async (e) => {
       e.preventDefault();
-      btn.disabled = true;
-      try {
-        await adminSignIn(state.email.trim(), state.password);
-      } catch (err) {
-        console.error(err);
-        toast("Email ya password galat hai ❌", true);
-      } finally {
-        btn.disabled = false;
+      if (isNew) {
+        if (state.p1.length < 4) return toast("Password kam se kam 4 letter ka rakho", true);
+        if (state.p1 !== state.p2) return toast("Dono password same nahi hain ❌", true);
+        await setPassword(state.p1);
+        toast("Password set ho gaya 🔐");
+        return openEditor();
       }
+      if (await checkPassword(state.p1)) return openEditor();
+      toast("Galat password ❌", true);
     },
   },
-    h("h2", {}, "Sirf owner ke liye 🔒"),
-    h("p", { class: "hint" }, "Apna Firebase wala email aur password daalo."),
-    h("label", { class: "field" }, h("span", {}, "Email"), h("input", { type: "email", autocomplete: "username", required: true, oninput: (e) => (state.email = e.target.value) })),
-    h("label", { class: "field" }, h("span", {}, "Password"), h("input", { type: "password", autocomplete: "current-password", required: true, oninput: (e) => (state.password = e.target.value) })),
-    btn,
+    h("h2", {}, isNew ? "Apna password banao 🔐" : "Sirf owner ke liye 🔒"),
+    h("p", { class: "hint" }, isNew
+      ? "Ye password sirf aapke phone pe save hoga. Agli baar admin khologe to yahi maangega."
+      : "Apna password daalo."),
+    h("label", { class: "field" }, h("span", {}, "Password"),
+      h("input", { type: "password", autocomplete: isNew ? "new-password" : "current-password", required: true, oninput: (e) => (state.p1 = e.target.value) })),
+    isNew ? h("label", { class: "field" }, h("span", {}, "Password dobara"),
+      h("input", { type: "password", autocomplete: "new-password", required: true, oninput: (e) => (state.p2 = e.target.value) })) : null,
+    h("button", { class: "btn primary", type: "submit" }, isNew ? "Password set karo" : "Kholo 🔓"),
+    isNew ? null : h("button", {
+      class: "chip forgot", type: "button",
+      onclick: () => {
+        if (confirm("Password bhool gaye? Reset karne se password aur saved sawal dono hat jayenge (jo link pehle bheja hai wo chalta rahega).")) {
+          resetAll();
+          passwordForm();
+        }
+      },
+    }, "Password bhool gaye?"),
   );
   root.replaceChildren(form);
 }
 
-async function start() {
-  if (!isFirebaseReady()) {
-    cfg = await loadConfig();
-    render();
-    return;
-  }
-  logoutBtn.addEventListener("click", () => adminSignOut());
-  try {
-    await onAdminAuth(async (user) => {
-      logoutBtn.hidden = !user;
-      if (!user) return loginForm();
-      root.replaceChildren(h("p", {}, "Loading…"));
-      cfg = await loadConfig();
-      render();
-    });
-  } catch (e) {
-    console.error(e);
-    root.replaceChildren(h("div", { class: "notice" }, "Firebase se connect nahi ho paya. Internet aur js/firebase-config.js check karo."));
-  }
+function openEditor() {
+  cfg = loadDraft();
+  lockBtn.hidden = false;
+  render();
 }
 
-start();
+lockBtn.addEventListener("click", () => {
+  lockBtn.hidden = true;
+  linkPanel.hidden = true;
+  passwordForm();
+});
+
+passwordForm();

@@ -420,3 +420,6 @@ select option { background: #3a0d2a; }
 .login .btn { margin-top: 6px; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; }
 .row .chip { flex: 1; justify-content: center; }
+
+.link-panel { border-color: rgba(255, 213, 158, .6); box-shadow: 0 0 40px rgba(255, 77, 132, .25); }
+.forgot { margin: 14px auto 0; display: flex; background: transparent; border: 0; color: var(--muted); text-decoration: underline; }
