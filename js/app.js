@@ -41,25 +41,20 @@ function boy(state, bubble) {
   return wrap;
 }
 
-function progress() {
-  if (cfg.questions.length < 2) return el("div");
-  const p = el("div", "dots");
-  cfg.questions.forEach((_, i) => p.append(el("span", i === qi ? "on" : i < qi ? "done" : "")));
-  return p;
-}
-
 function options(list) {
   const box = el("div", "options");
-  list.forEach((o, i) => {
-    const style = o.action === "happy" ? "primary" : "ghost";
-    box.append(button(o.label, `${style} ${i === 0 && o.action === "happy" ? "pulse" : ""}`, () => act(o.action)));
+  list.forEach((o) => {
+    const b = button(o.label, o.action === "happy" ? "primary pulse" : "ghost", () => act(o.action));
+    // Every "No" makes the Yes button a little bigger.
+    if (o.action === "happy" && qi > 0) b.style.fontSize = `${Math.min(17 + qi * 1.5, 26)}px`;
+    box.append(b);
   });
   return box;
 }
 
 function act(action) {
   if (action === "happy") return happy();
-  if (action === "retry") return retry();
+  if (action === "next" && qi < cfg.questions.length - 1) return question(qi + 1);
   return sad();
 }
 
@@ -83,34 +78,26 @@ function question(i) {
   music.stop();
   qi = i;
   const q = cfg.questions[i];
-  show(progress(), boy("idle", "🥺"), el("h2", "question", q.text), options(q.options));
-}
-
-function retry() {
-  const q = cfg.questions[qi];
-  show(progress(), boy("idle", "🥹"), el("h2", "question", q.retry.text), options(q.retry.options));
+  const faces = ["🥺", "🥹", "😳", "🙏", "😢", "😭"];
+  show(boy("idle", faces[Math.min(i, faces.length - 1)]), el("h2", "question", q.text), options(q.options));
 }
 
 function happy() {
   const q = cfg.questions[qi];
   music.play(cfg.song.url);
   burst();
-  const last = qi >= cfg.questions.length - 1;
   show(
     el("h1", "title glow", cfg.happyTitle),
     boy("happy", q.happyMessage),
-    last ? el("p", "sub final", cfg.finalMessage) : el("div"),
-    last
-      ? button(cfg.replayButton, "ghost", intro)
-      : button(cfg.nextButton, "primary", () => question(qi + 1)),
+    el("p", "sub final", cfg.finalMessage),
+    button(cfg.replayButton, "ghost", intro),
   );
   speak(q.happyMessage);
 }
 
 function sad() {
   music.stop();
-  const q = cfg.questions[qi];
-  show(boy("sad", q.sadMessage), button(cfg.sadButton, "primary", () => question(qi)));
+  show(boy("sad", cfg.sadMessage), button(cfg.sadButton, "primary", () => question(0)));
 }
 
 // ---------- effects ----------

@@ -1,35 +1,42 @@
-// Default content. Owner can change all of this from the admin page (admin.html).
+// Fallback content, used only if config.json can't be loaded.
+// The live content is in config.json (owner edits it from admin.html).
 // {name} is replaced with the girlfriend's name.
+//
+// Option actions:
+//   happy = happy boy + song (the end)
+//   next  = go to the next question (on the last question: sad boy)
+//   sad   = sad boy, then back to the first question
 
 export const DEFAULT_QUESTION = {
-  text: "Do you love me? 💖",
+  text: "Naya sawal? 💭",
   options: [
     { label: "Yes 😍", action: "happy" },
-    { label: "No 🙄", action: "retry" },
+    { label: "No 🙄", action: "next" },
   ],
-  retry: {
-    text: "Ek baar aur soch lo 🥺",
-    options: [
-      { label: "Soch liya, nahi banana boyfriend 😒", action: "sad" },
-      { label: "Haan bana liya ❤️", action: "happy" },
-    ],
-  },
   happyMessage: "Love you baby ❤️",
-  sadMessage: "Please ek baar aur soch lo 😢",
 };
 
 export const DEFAULT_CONFIG = {
   herName: "Baby",
   intro: {
     title: "Hey {name} 💕",
-    text: "Mere paas tumhare liye ek bahut zaroori sawal hai...",
+    text: "Sagar ke paas tumhare liye ek bahut zaroori sawal hai...",
     button: "Pucho na 🙈",
   },
-  questions: [DEFAULT_QUESTION],
+  questions: [
+    {
+      text: "Do you love me? 💖",
+      options: [
+        { label: "Yes 😍", action: "happy" },
+        { label: "No 🙄", action: "next" },
+      ],
+      happyMessage: "Love you baby ❤️",
+    },
+  ],
   happyTitle: "Yayyy! 🥰",
-  nextButton: "Agla sawal 💌",
   finalMessage: "Tum meri duniya ho, {name} 💞",
   replayButton: "Phir se shuru karo 🔁",
+  sadMessage: "Please ek baar aur soch lo 😢",
   sadButton: "Theek hai, phir se poocho 🥺",
   // Empty url = built-in happy tune.
   song: { url: "" },

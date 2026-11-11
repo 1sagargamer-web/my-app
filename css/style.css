@@ -399,7 +399,7 @@ select option { background: #3a0d2a; }
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
-.savebar .btn { max-width: 608px; margin: 0 auto; display: block; }
+.savebar > .btn { max-width: 608px; margin: 0 auto; display: block; }
 
 .toast {
   position: fixed; left: 50%; bottom: 96px; z-index: 30;
@@ -423,3 +423,11 @@ select option { background: #3a0d2a; }
 
 .link-panel { border-color: rgba(255, 213, 158, .6); box-shadow: 0 0 40px rgba(255, 77, 132, .25); }
 .forgot { margin: 14px auto 0; display: flex; background: transparent; border: 0; color: var(--muted); text-decoration: underline; }
+.savebar-row { max-width: 608px; margin: 0 auto; display: grid; grid-template-columns: 1fr 2fr; gap: 10px; }
+.savebar-row .btn { margin: 0; }
+.token summary { cursor: pointer; font-weight: 600; font-size: 16px; padding: 2px 0; }
+.token[open] summary { margin-bottom: 12px; }
+.steps { margin: 0 0 14px; padding-left: 22px; font-size: 14px; line-height: 1.8; color: var(--muted); }
+.steps a { color: var(--gold); }
+.boy-wrap.idle .boy-figure { width: min(42vw, 165px); }
+.question { font-size: clamp(22px, 6.2vw, 28px); }

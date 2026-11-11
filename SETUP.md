@@ -1,34 +1,39 @@
-# Setup Guide 💖 (sirf 2 step)
+# Setup Guide 💖
 
-Koi account ya Firebase nahi chahiye. Bas app ko internet pe daalna hai, ek baar.
+## 1. Link mein apna naam (ek baar, 30 second)
 
-## Step 1: Repo public karo
 1. Ye kholo: https://github.com/1sagargamer-web/my-app/settings
-2. Sabse neeche **Danger Zone → Change visibility → Change to public** → confirm.
+2. Sabse upar **Repository name** mein `my-app` hata ke likho: `sagar-baby`
+3. **Rename** dabao.
 
-(Safe hai: code mein koi password ya aapke sawal nahi hain. Sawal sirf link ke andar jaate hain.)
+Ab GF ka link ye hoga 👉 **https://1sagargamer-web.github.io/sagar-baby/**
+Admin 👉 **https://1sagargamer-web.github.io/sagar-baby/admin.html**
 
-## Step 2: GitHub Pages on karo
-1. Ye kholo: https://github.com/1sagargamer-web/my-app/settings/pages
-2. **Branch** wale dropdown mein app wali branch chuno (`main`, ya agar merge nahi kiya to `ccr-c22cac67-hmboj9`) → folder **/ (root)** → **Save**.
-3. 1-2 minute ruko.
+(1-2 minute lag sakte hain naya link chalu hone mein.)
 
-Bas! App live ho gaya ✅
+## 2. GF ko link bhejo
+Upar wala chhota link WhatsApp pe bhej do. Ye link hamesha same rahega. 🎉
 
 ---
 
-## Roz ka use
+## Sawal badalna (jab chaho)
 
-1. Apne phone pe kholo: **https://1sagargamer-web.github.io/my-app/admin.html**
-2. Pehli baar apna password banao (sirf aapke phone pe save hota hai).
-3. Sawal, options, messages, song jo chahe badlo.
-4. **💌 Save karo + Link banao** dabao.
-5. **WhatsApp** button dabake link GF ko bhej do. 🎉
+1. Admin kholo → apna password daalo (pehli baar naya banao).
+2. Sawal hatao 🗑, badlo, ya naye add karo.
+3. **👀 Preview** se dekh lo kaisa dikhega.
+4. **💾 Save karo** → 1-2 minute mein GF ke link pe update ho jayega.
 
-Kuch badla? Phir se "Link banao" dabao aur naya link bhejo.
+**Pehli baar Save pe ek "GitHub token" maangega** (sirf ek baar):
+1. Admin mein token wale box ka link kholo
+2. Repository access → Only select repositories → `sagar-baby` chuno
+3. Permissions → Contents → **Read and write**
+4. **Generate token** → copy → admin mein paste → **Set**
+
+Token mushkil lage? Mujhe (Claude ko) chat mein bol do kaunsa sawal hatana/badalna hai, main kar dunga.
 
 ### Tips
-- **Song:** apna mp3 GitHub repo ke `music` folder mein upload karo, phir admin mein `music/song.mp3` likho. Ya kisi mp3 ka direct link daalo. Khaali chhodoge to built-in happy tune bajegi.
+- Har "No" pe agla sawal aata hai. Aakhri sawal pe bhi "No" kiya to sad boy aata hai, phir pehle sawal se shuru.
+- Har "No" ke baad "Yes" button thoda bada ho jata hai 😄
+- **Song:** apna mp3 repo ke `music` folder mein upload karo, admin mein `music/song.mp3` likho. Khaali = built-in tune.
 - **Naam:** kisi bhi text mein `{name}` likho, wahan GF ka naam aa jayega.
-- **Sirf aap hi kyun?** Admin aapke password se khulta hai, aur GF ke paas jo link hai wo sirf aap hi bana sakte ho. Wo kuch bhi kare, aapka bheja hua link nahi badal sakti.
-- Password bhool gaye? Admin page pe "Password bhool gaye?" dabao. Naya password ban jayega, lekin saved sawal hat jayenge (pehle bheje links chalte rahenge).
+- Password aur token sirf aapke phone pe rehte hain. GF admin khol bhi le, to bina password aur token ke kuch save nahi kar sakti.

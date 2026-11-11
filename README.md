@@ -3,8 +3,8 @@
 Ek cute "Do you love me?" web app.
 
 - **Yes** → happy boy naachta hai, "Love you baby ❤️" bolta hai, song bajta hai, hearts udte hain.
-- **No** → "Ek baar aur soch lo 🥺" → "Haan bana liya ❤️" (happy) ya "Soch liya, nahi banana" (sad boy, wapas sawal).
-- **Owner panel** (`admin.html`): password se khulta hai. Sawal, options, messages, song badlo → "Link banao" → GF ko bhejo. Koi server/account nahi chahiye, saari settings link ke andar hoti hain.
+- **No** → har No pe naya, aur pyaara sawal, jab tak wo Yes na bole. Aakhri No pe sad boy, phir wapas shuru.
+- **Owner panel** (`admin.html`): password se khulta hai. Sawal, options, messages, song badlo → Save. Link hamesha chhota aur same rehta hai.
 
 Setup ke steps: [SETUP.md](SETUP.md)
 
@@ -14,8 +14,9 @@ Setup ke steps: [SETUP.md](SETUP.md)
 |---|---|
 | `index.html`, `js/app.js` | GF wala app |
 | `admin.html`, `js/admin.js` | Owner panel |
-| `js/defaults.js` | Default questions/text |
-| `js/store.js` | Settings ko link mein daalna/padhna, owner password |
+| `config.json` | Saare sawal aur text (admin se badalte hain) |
+| `js/defaults.js` | Backup default text |
+| `js/store.js` | config.json padhna/save karna, owner password |
 | `js/boy.js` | Boy character (SVG) |
 | `js/music.js` | Built-in happy tune + mp3 player |
 | `music/` | Apne mp3 songs yahan |
