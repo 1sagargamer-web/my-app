@@ -24,6 +24,15 @@ Koi API key nahi, koi paisa nahi.
 
 Adhoori baat bologe to Baby poochhegi: **"Message bhejo"** → *"Kisko bhejna hai?"* → **"Rahul"** → *"Kya message bhejna hai?"* → **"Kal milte hain"** ✅
 
+## 🆕 Naya (behtar samajh)
+- **"YouTube kholo aur hamdard song lagao"** → YouTube khulta hai aur pehla video **khud chalta hai** (sirf "search karo" bolo to sirf dikhata hai). Iske liye Background Control ON hona chahiye.
+- **"Play Store kholo aur Free Fire install karo"** / **"Free Fire download karo"** → Play Store me search karke **Install** khud dabata hai. Phir **"open karo"** bolo to app khul jaata hai.
+- Ek hi baar me do kaam: "WhatsApp kholo aur Mummy ko hello bhejo", "Play Store me pubg dhundo aur install karo".
+- **Contact ka naam**: bilkul match ho to seedha bhej deta hai. Thoda alag lage to poochhta hai *"Exact wahi naam nahi mila, kya X ko bhejun? Haan bolo ya sahi naam batao."* Bilkul na mile to naam phir se maangta hai.
+- **🕓 History**: app me upar 🕓 dabao — Baby ne is phone par jo kuch kiya (command, message, photo) sab yahin dikhta hai. Yeh **kahin bheja nahi jaata**, sirf isi phone par rehta hai; "🗑 Saara mitado" se mita sakte ho.
+
+> **Note:** "Owner panel jisme doosron ki activity/photos chupke mil jayein" — woh jaan-bujhkar nahi banaya. Woh doosre logon ki jasoosi (spyware) ban jaata, jo galat aur khatarnak hai. Iske badle upar wali **History** hai, jo usi phone par khuli-aam dikhti hai.
+
 ## 🎧 Background me har baat sunti hai
 - Baby ON karte hi ek **notification** aata hai ("Baby ON hai ✨") jisme **🎤 Bolo / ⏸ Roko / ✕ Band** buttons hain.
 - WhatsApp, YouTube, home screen, kahin bhi raho, bas bolo. Jaise WhatsApp me chat khuli hai to: **"Isko message karo ki hello"**.
