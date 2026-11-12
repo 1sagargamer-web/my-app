@@ -71,6 +71,20 @@ class DeviceActions(private val ctx: Context) {
         return start(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=" + Uri.encode(query))))
     }
 
+    /** Play Store me app dhundo (hamesha Play Store me, Google par nahi). */
+    fun playStoreSearch(query: String): Boolean {
+        val store = "com.android.vending"
+        val market = Intent(Intent.ACTION_VIEW, Uri.parse("market://search?q=" + Uri.encode(query) + "&c=apps"))
+        if (apps.isInstalled(store)) {
+            market.setPackage(store)
+            if (start(market)) return true
+        }
+        // Play Store app na ho to web Play Store (phir bhi Google search nahi)
+        val web = Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/search?q=" + Uri.encode(query) + "&c=apps"))
+        if (apps.isInstalled(store)) web.setPackage(store)
+        return start(web)
+    }
+
     fun navigate(place: String): Boolean {
         val nav = Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=" + Uri.encode(place)))
             .setPackage("com.google.android.apps.maps")

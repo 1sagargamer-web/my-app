@@ -96,6 +96,7 @@ class MainActivity : AppCompatActivity(), BabyBus.Listener {
         findViewById<View>(R.id.btnHelp).setOnClickListener { showHelp() }
         findViewById<View>(R.id.btnSettings).setOnClickListener { showSettings() }
         findViewById<View>(R.id.btnVoice).setOnClickListener { startActivity(Intent(this, VoicePackActivity::class.java)) }
+        findViewById<View>(R.id.btnHistory).setOnClickListener { startActivity(Intent(this, HistoryActivity::class.java)) }
 
         dotAnim = ObjectAnimator.ofFloat(statusDot, View.ALPHA, 1f, 0.25f).apply {
             duration = 700

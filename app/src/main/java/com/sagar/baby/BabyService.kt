@@ -157,7 +157,9 @@ class BabyService : Service(), VoiceListener.Callback {
     /** Screen ke button se command (bina bole). */
     fun runText(text: String) {
         BabyBus.chat(true, text)
-        respond(assistant.handleText(text))
+        val reply = assistant.handleText(text)
+        History.log(this, "👆", text, reply.text)
+        respond(reply)
     }
 
     // --- Sunne ka loop ----------------------------------------------------------------------
@@ -223,7 +225,9 @@ class BabyService : Service(), VoiceListener.Callback {
             schedule(150)
             return
         }
-        BabyBus.chat(true, Roman.readable(results.first()))
+        val heard = Roman.readable(results.first())
+        BabyBus.chat(true, heard)
+        History.log(this, "🗣️", heard, reply.text)
         respond(reply)
     }
 

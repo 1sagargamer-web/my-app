@@ -117,6 +117,63 @@ class AutoSendService : AccessibilityService() {
         false
     }
 
+    /**
+     * Jo screen par khula hai uspe ek button dabana. [labels] = jin shabdon wala button dhoondhna hai.
+     * Thodi der ruk kar try karta hai (page load hone ka waqt deta hai). [onResult] true = mil gaya aur daba diya.
+     */
+    fun tapButton(labels: Set<String>, tries: Int = 10, onResult: ((Boolean) -> Unit)? = null) {
+        var left = tries
+        val r = object : Runnable {
+            override fun run() {
+                val node = rootInActiveWindow?.let { findByText(it, labels) }
+                if (node != null && click(node)) { onResult?.invoke(true); return }
+                if (--left > 0) main.postDelayed(this, 600) else onResult?.invoke(false)
+            }
+        }
+        main.post(r)
+    }
+
+    /** YouTube/kisi list ka sabse pehla video/result dabana. */
+    fun tapFirstResult(pkg: String, tries: Int = 10, onResult: ((Boolean) -> Unit)? = null) {
+        var left = tries
+        val r = object : Runnable {
+            override fun run() {
+                val root = rootInActiveWindow
+                val node = root?.let { firstVideo(it, pkg) }
+                if (node != null && click(node)) { onResult?.invoke(true); return }
+                if (--left > 0) main.postDelayed(this, 700) else onResult?.invoke(false)
+            }
+        }
+        main.postDelayed(r, 800)
+    }
+
+    private fun findByText(root: AccessibilityNodeInfo, labels: Set<String>): AccessibilityNodeInfo? =
+        bfs(root) { n ->
+            if (!n.isVisibleToUser) return@bfs false
+            val t = n.text?.toString()?.trim()?.lowercase()
+            val d = n.contentDescription?.toString()?.trim()?.lowercase()
+            (t != null && labels.any { t == it || t.startsWith("$it ") }) ||
+                (d != null && labels.any { d == it || d.startsWith("$it ") })
+        }
+
+    private fun firstVideo(root: AccessibilityNodeInfo, pkg: String): AccessibilityNodeInfo? {
+        // YouTube ke video thumbnails
+        listOf("$pkg:id/thumbnail", "$pkg:id/video_thumbnail", "$pkg:id/image").forEach { id ->
+            root.findAccessibilityNodeInfosByViewId(id).firstOrNull { it.isVisibleToUser && it.height() > 100 }?.let { return it }
+        }
+        // Backup: pehla bada clickable jisme "video" / play jaisa desc ho, upar ki taraf
+        return bfs(root) { n ->
+            n.isVisibleToUser && n.isClickable && n.height() > 150 &&
+                (n.contentDescription?.contains("video", true) == true || n.contentDescription?.contains("play", true) == true)
+        }
+    }
+
+    private fun AccessibilityNodeInfo.height(): Int {
+        val r = android.graphics.Rect()
+        getBoundsInScreen(r)
+        return r.height()
+    }
+
     private fun findEntry(root: AccessibilityNodeInfo, pkg: String): AccessibilityNodeInfo? {
         root.findAccessibilityNodeInfosByViewId("$pkg:id/entry").firstOrNull { it.isVisibleToUser }?.let { return it }
         return bfs(root) { it.isEditable && it.isVisibleToUser }

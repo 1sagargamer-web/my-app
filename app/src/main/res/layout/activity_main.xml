@@ -45,7 +45,18 @@
             </LinearLayout>
 
             <TextView
+                android:id="@+id/btnHistory"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="@drawable/glass_circle"
+                android:contentDescription="History"
+                android:gravity="center"
+                android:text="🕓"
+                android:textSize="18sp" />
+
+            <TextView
                 android:id="@+id/btnVoice"
+                android:layout_marginStart="8dp"
                 android:layout_width="44dp"
                 android:layout_height="44dp"
                 android:background="@drawable/glass_circle"

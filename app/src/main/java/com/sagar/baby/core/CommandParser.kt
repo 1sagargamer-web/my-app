@@ -4,9 +4,13 @@ enum class Platform { WHATSAPP, SMS, TELEGRAM, ANY }
 enum class VolumeAction { UP, DOWN, MUTE, MAX }
 enum class SettingsPage { WIFI, BLUETOOTH, LOCATION, DISPLAY, MAIN }
 
+/** Screen par jo abhi khula hai uspe button dabana. */
+enum class ScreenTarget { INSTALL, OPEN, PLAY_FIRST }
+
 sealed class Command {
     data class OpenApp(val name: String) : Command()
-    data class YouTubeSearch(val query: String) : Command()
+    /** [autoplay] true = pehla result khud chala do (sirf YouTube me, accessibility se). */
+    data class YouTubeSearch(val query: String, val autoplay: Boolean = false) : Command()
     data class WebSearch(val query: String) : Command()
     data class Navigate(val place: String) : Command()
     data class SendMessage(val contact: String?, val text: String?, val platform: Platform) : Command()
@@ -14,6 +18,11 @@ sealed class Command {
     data class TakePhoto(val front: Boolean, val autoCapture: Boolean) : Command()
     data class Torch(val on: Boolean) : Command()
     data class Volume(val action: VolumeAction) : Command()
+
+    /** Play Store me app dhundo. [autoInstall] true = Install button bhi khud dabao. */
+    data class InstallApp(val query: String, val autoInstall: Boolean) : Command()
+    /** Jo screen par khula hai uspe Install / Open / pehla result dabao. */
+    data class ScreenTap(val kind: ScreenTarget) : Command()
 
     /** hour 0-23. [explicitPeriod] false ho to "7 baje" jaisa - subah/shaam baad me tay hoga. hour = -1 matlab time nahi bola. */
     data class Alarm(val hour: Int, val minute: Int, val explicitPeriod: Boolean) : Command()
@@ -95,6 +104,11 @@ object CommandParser {
     private val BATTERY = set("battery", "betri", "baitri", "batri", "bettery", "charging", "charge", "baitari", "betari")
     private val ALARM = set("alarm", "alaram", "alarum", "alarme")
     private val TIMER = set("timer", "taimar", "taimer", "timar")
+    private val INSTALL = set(
+        "install", "instal", "instol", "installed", "installo", "download", "downlod", "downlad",
+        "daunlod", "dawnlod", "dawnload", "daunload", "instaal",
+    )
+    private val GENERIC_APP = set("game", "gem", "gaym", "gameko", "app", "apps", "application", "wala", "waala")
     private val NAV = set("rasta", "raasta", "route", "navigate", "navigation", "direction", "directions", "rastaa")
     private val MAPS = set("map", "maps", "naksha")
     private val SONG = set("gana", "gaana", "gane", "gaane", "song", "songs", "music", "geet", "bhajan", "gaano", "ganna")
@@ -199,6 +213,15 @@ object CommandParser {
                     val pl = isPlatformName(prev.name)!!
                     out[out.size - 1] = c.copy(platform = if (c.platform == Platform.ANY) pl else c.platform)
                 }
+                // "YouTube kholo aur X song lagao" -> seedha YouTube search (search khud YouTube kholta hai)
+                prev is Command.OpenApp && c is Command.YouTubeSearch && isYouTubeName(prev.name) ->
+                    out[out.size - 1] = c
+                // "Play Store kholo aur X install karo" -> seedha Play Store install
+                prev is Command.OpenApp && c is Command.InstallApp && isStoreName(prev.name) ->
+                    out[out.size - 1] = c
+                // "Play Store kholo aur isko install karo" -> abhi screen pe nahi, pichhle install ko mila do
+                prev is Command.InstallApp && c is Command.ScreenTap && c.kind == ScreenTarget.INSTALL ->
+                    out[out.size - 1] = prev.copy(autoInstall = true)
                 else -> out.add(c)
             }
         }
@@ -215,6 +238,9 @@ object CommandParser {
         }
     }
 
+    private fun isYouTubeName(name: String) = isYouTube(Translit.normPhrase(name).replace(" ", ""))
+    private fun isStoreName(name: String) = hasPlayStore(tokenize(name))
+
     /** [strict] = background mode: aam baat-cheet ko Google search mat banao. */
     fun parse(text: String, strict: Boolean = false): Command {
         var t = tokenize(text)
@@ -226,6 +252,7 @@ object CommandParser {
             ?: parseTorch(t)
             ?: parseVolume(t)
             ?: parseCamera(t)
+            ?: parseInstall(t)
             ?: parseYouTube(t)
             ?: parseSong(t)
             ?: parseNavigate(t)
@@ -256,6 +283,19 @@ object CommandParser {
 
     private fun isYouTube(n: String) =
         n in set("youtube", "yutub", "yutyub", "utub", "yt", "yutube", "utube") || Fuzzy.similarity(n, "yutube") >= 0.75
+
+    private val STORE_WORD = set("store", "stor", "istor", "estore", "istore")
+    private val PLAY_WORD = set("play", "ple", "play")
+
+    private fun hasPlayStore(t: List<Tok>): Boolean {
+        for (i in t.indices) {
+            val n = t[i].n
+            if (n in set("playstore", "plestor", "pleystor", "plestore", "playstor", "vending")) return true
+            if (n in PLAY_WORD && t.getOrNull(i + 1)?.n in STORE_WORD) return true
+            if (n in STORE_WORD && t.getOrNull(i - 1)?.n in PLAY_WORD) return true
+        }
+        return false
+    }
 
     private fun detectPlatform(t: List<Tok>): Platform? {
         for (x in t) {
@@ -529,8 +569,29 @@ object CommandParser {
 
     private val QUERY_NOISE: (Tok) -> Boolean = {
         it.n in POSTP || it.n in OPEN || it.n in PLAY || it.n in SEARCH || it.n in TRAIL || it.n in FILLER ||
-            it.n in SHOW || it.n in APPWORD || it.n in WAKE || it.n in set("karke", "karo", "kariye", "mujhe", "par", "pe", "ko")
+            it.n in SHOW || it.n in APPWORD || it.n in WAKE || it.n in YE ||
+            it.n in set("karke", "karo", "kariye", "mujhe", "par", "pe", "ko")
     }
+
+    private fun parseInstall(t: List<Tok>): Command? {
+        val hasInstall = t.has(INSTALL)
+        val onStore = hasPlayStore(t)
+        if (!hasInstall && !onStore) return null
+        val name = stripEdges(t) {
+            QUERY_NOISE(it) || it.n in INSTALL || it.n in GENERIC_APP || it.n in APPWORD ||
+                it.n in PLAY_WORD || it.n in STORE_WORD || it.n in THIS_CHAT ||
+                it.n in set("playstore", "plestor", "pleystor", "plestore", "playstor", "vending", "karo", "kardo", "do")
+        }
+        val nm = name.raw()
+        return when {
+            nm.isNotBlank() -> Command.InstallApp(nm, autoInstall = hasInstall)
+            hasInstall -> Command.ScreenTap(ScreenTarget.INSTALL) // "ye game download karo"
+            else -> Command.OpenApp("Play Store") // "Play Store kholo"
+        }
+    }
+
+    /** "lagao/bajao/chalao/sunao" bola = pehla video khud chala do; "search/dhundo" = sirf dikhao. */
+    private fun wantsAutoplay(t: List<Tok>) = (t.has(PLAY) || t.has(SONG)) && !t.has(SEARCH)
 
     private fun parseYouTube(t: List<Tok>): Command? {
         val idx = t.indexOfFirst { isYouTube(it.n) }
@@ -538,15 +599,15 @@ object CommandParser {
         val rest = t.filterIndexed { i, _ -> i != idx }
         val q = stripEdges(rest, QUERY_NOISE)
         if (q.isEmpty() || q.all { QUERY_NOISE(it) }) return Command.OpenApp("YouTube")
-        return Command.YouTubeSearch(q.raw())
+        return Command.YouTubeSearch(q.raw(), autoplay = wantsAutoplay(t))
     }
 
     private fun parseSong(t: List<Tok>): Command? {
         if (!t.has(SONG)) return null
         if (!t.has(PLAY) && !t.has(OPEN) && !t.has(SEARCH) && t.size > 2) return null
         val q = stripEdges(t, QUERY_NOISE)
-        if (q.size <= 1 && q.all { it.n in SONG }) return Command.YouTubeSearch("hindi songs")
-        return Command.YouTubeSearch(q.raw())
+        if (q.isEmpty() || q.all { it.n in SONG }) return Command.YouTubeSearch("hindi songs", autoplay = !t.has(SEARCH))
+        return Command.YouTubeSearch(q.raw(), autoplay = wantsAutoplay(t))
     }
 
     private fun parseNavigate(t: List<Tok>): Command? {
@@ -598,10 +659,16 @@ object CommandParser {
         return Command.WebSearch(q.raw())
     }
 
+    private val OPEN_ONLY = set("kholo", "khol", "open", "opan", "kholo", "kholdo", "kholde")
+
     private fun parseOpenApp(t: List<Tok>): Command? {
         val hasVerb = t.has(OPEN) || t.has(PLAY)
         val name = stripEdges(t) { QUERY_NOISE(it) || it.n in APPWORD }
-        if (name.isEmpty()) return null
+        if (name.isEmpty()) {
+            // Sirf "open karo" / "kholo" / "isko kholo" -> jo screen par hai usko kholo (jaise install ke baad)
+            if (t.has(OPEN_ONLY) && t.size <= 3) return Command.ScreenTap(ScreenTarget.OPEN)
+            return null
+        }
         if (hasVerb) return Command.OpenApp(name.raw())
         return null
     }

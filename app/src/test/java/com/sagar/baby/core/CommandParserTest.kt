@@ -33,10 +33,12 @@ class CommandParserTest {
     }
 
     @Test fun youtubeSearch() {
-        assertEquals(YouTubeSearch("arijit singh ke gaane"), p("youtube pe arijit singh ke gaane chalao"))
-        assertEquals(YouTubeSearch("funny videos"), p("YouTube par funny videos dikhao"))
-        assertEquals(YouTubeSearch("hindi songs"), p("gaana bajao"))
-        assertEquals(YouTubeSearch("kesariya song"), p("kesariya song play karo"))
+        assertEquals(YouTubeSearch("arijit singh ke gaane", autoplay = true), p("youtube pe arijit singh ke gaane chalao"))
+        assertEquals(YouTubeSearch("funny videos", autoplay = false), p("YouTube par funny videos dikhao"))
+        assertEquals(YouTubeSearch("hindi songs", autoplay = true), p("gaana bajao"))
+        assertEquals(YouTubeSearch("kesariya song", autoplay = true), p("kesariya song play karo"))
+        assertEquals(YouTubeSearch("hamdard gaana", autoplay = true), p("hamdard gaana lagao"))
+        assertEquals(YouTubeSearch("arijit", autoplay = false), p("youtube pe arijit search karo"))
     }
 
     @Test fun messages() {
@@ -162,5 +164,31 @@ class CommandParserTest {
         assertEquals("khana kha liya", Roman.readable("खाना खा लिया"))
         assertEquals("hello bhai", Roman.readable("hello भाई"))
         assertEquals("ghar aa jao", Roman.readable("घर आ जाओ"))
+    }
+
+    @Test fun installAndStore() {
+        assertEquals(InstallApp("Free Fire", autoInstall = true), p("Play Store me Free Fire install karo"))
+        assertEquals(InstallApp("free fire", autoInstall = true), p("free fire download karo"))
+        assertEquals(InstallApp("pubg", autoInstall = false), p("Play Store me pubg dhundo"))
+        assertEquals(OpenApp("Play Store"), p("Play Store kholo"))
+        assertEquals(ScreenTap(ScreenTarget.INSTALL), p("ye game download karo"))
+        assertEquals(ScreenTap(ScreenTarget.INSTALL), p("isko install karo"))
+        assertEquals(ScreenTap(ScreenTarget.OPEN), p("open karo"))
+        assertEquals(ScreenTap(ScreenTarget.OPEN), p("ab kholo"))
+    }
+
+    @Test fun installChains() {
+        assertEquals(
+            listOf(InstallApp("Free Fire", autoInstall = true)),
+            CommandParser.parseAll("Play Store kholo aur Free Fire install karo"),
+        )
+        assertEquals(
+            listOf(InstallApp("free fire", autoInstall = true)),
+            CommandParser.parseAll("Play Store me free fire search karo aur install karo"),
+        )
+        assertEquals(
+            listOf(YouTubeSearch("hamdard song", autoplay = true)),
+            CommandParser.parseAll("YouTube kholo aur hamdard song lagao"),
+        )
     }
 }

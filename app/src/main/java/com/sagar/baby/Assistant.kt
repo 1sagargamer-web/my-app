@@ -8,6 +8,7 @@ import com.sagar.baby.core.Command
 import com.sagar.baby.core.CommandParser
 import com.sagar.baby.core.Platform
 import com.sagar.baby.core.Roman
+import com.sagar.baby.core.ScreenTarget
 import com.sagar.baby.core.SettingsPage
 import com.sagar.baby.core.Translit
 import com.sagar.baby.core.VolumeAction
@@ -62,6 +63,8 @@ class Assistant(
         class NeedText(val contact: Contact, val platform: Platform) : Pending()
         class NeedContact(val text: String?, val platform: Platform) : Pending()
         class NeedCallContact : Pending()
+        /** Naam pakka nahi — "haan" bolo to isi ko, ya naya naam bolo. */
+        class ConfirmContact(val contact: Contact, val text: String?, val platform: Platform, val isCall: Boolean) : Pending()
     }
 
     private var pending: Pending? = null
@@ -124,6 +127,13 @@ class Assistant(
         return Reply(text, clip)
     }
 
+    private fun screenTap(labels: Set<String>, okMsg: String, failMsg: String): Reply {
+        val acc = AutoSendService.instance
+            ?: return Reply("Iske liye Background Control (Accessibility) ON karna hoga.")
+        acc.tapButton(labels) { ok -> if (!ok) onAsyncReply?.invoke(Reply(failMsg)) }
+        return Reply(okMsg, "app_open")
+    }
+
     // ---------------------------------------------------------------------------------------
 
     private fun handlePending(p: Pending, text: String): Reply? {
@@ -133,6 +143,16 @@ class Assistant(
             is Pending.NeedText -> deliver(p.contact, text, p.platform)
             is Pending.NeedContact -> messageTo(stripKo(text), p.text, p.platform)
             is Pending.NeedCallContact -> callTo(stripKo(text))
+            is Pending.ConfirmContact -> {
+                if (CommandParser.isYes(text)) {
+                    if (p.isCall) doCall(p.contact)
+                    else if (p.text.isNullOrBlank()) ask(Pending.NeedText(p.contact, p.platform), "${p.contact.name} ko kya message bhejna hai?", "ask_text")
+                    else deliver(p.contact, p.text, p.platform)
+                } else {
+                    // Naya naam bola -> use dhoondo
+                    if (p.isCall) callTo(stripKo(text)) else messageTo(stripKo(text), p.text, p.platform)
+                }
+            }
         }
     }
 
@@ -150,7 +170,41 @@ class Assistant(
         is Command.OpenApp -> openApp(cmd.name)
         is Command.YouTubeSearch -> {
             val q = Roman.readable(cmd.query)
-            Reply("YouTube pe \"$q\" dhoond diya!", "searching", { actions.youtubeSearch(q) })
+            if (cmd.autoplay && AutoSendService.instance != null) {
+                Reply("YouTube pe \"$q\" chala rahe hain!", "searching", {
+                    actions.youtubeSearch(q)
+                    AutoSendService.instance?.tapFirstResult("com.google.android.youtube")
+                })
+            } else {
+                val msg = if (cmd.autoplay) "YouTube pe \"$q\" khol diya — pehla video tap kar do (Background Control ON karo to khud chal jayega)."
+                else "YouTube pe \"$q\" dhoond diya!"
+                Reply(msg, "searching", { actions.youtubeSearch(q) })
+            }
+        }
+        is Command.InstallApp -> {
+            val q = Roman.readable(cmd.query)
+            if (cmd.autoInstall && AutoSendService.instance != null) {
+                Reply("Play Store me \"$q\" install kar rahe hain!", "app_open", {
+                    actions.playStoreSearch(q)
+                    // Pehle app par tap (search result), phir Install button
+                    AutoSendService.instance?.tapFirstResult("com.android.vending", tries = 8) {
+                        AutoSendService.instance?.tapButton(INSTALL_LABELS)
+                    }
+                })
+            } else {
+                val msg = if (cmd.autoInstall) "Play Store me \"$q\" khol diya — Install dabao (Background Control ON karo to khud ho jayega)."
+                else "Play Store me \"$q\" khol diya."
+                Reply(msg, "app_open", { actions.playStoreSearch(q) })
+            }
+        }
+        is Command.ScreenTap -> when (cmd.kind) {
+            ScreenTarget.INSTALL -> screenTap(INSTALL_LABELS, "Install daba diya.", "Install button nahi mila. Play Store me app khol kar bolo.")
+            ScreenTarget.OPEN -> screenTap(OPEN_LABELS, "Khol diya.", "Open button nahi mila.")
+            ScreenTarget.PLAY_FIRST -> {
+                val acc = AutoSendService.instance
+                if (acc == null) Reply("Iske liye Background Control ON karo.")
+                else { acc.tapFirstResult(acc.currentPackage() ?: "com.google.android.youtube"); Reply("Chala diya.", "app_open") }
+            }
         }
         is Command.WebSearch -> {
             val q = Roman.readable(cmd.query)
@@ -277,9 +331,14 @@ class Assistant(
         object NoPermission : Found()
         object NotFound : Found()
         class Ok(val contact: Contact) : Found()
+        /** Milta-julta naam mila par pakka nahi — confirm karwana hai. */
+        class Unsure(val contact: Contact) : Found()
     }
 
-    /** Sabse milta-julta contact seedha chuno - koi haan/na nahi. */
+    /**
+     * Contact dhoondo. Pakka match (>= 0.9) seedha chun lo; thoda alag (0.62–0.9) par confirm
+     * karwao; kuch bhi na mile to NotFound.
+     */
     private fun resolve(name: String): Found {
         val digits = name.filter { it.isDigit() }
         if (digits.length >= 7) return Found.Ok(Contact(digits, digits))
@@ -288,7 +347,11 @@ class Assistant(
             return Found.NoPermission
         }
         val best = contacts.find(name).firstOrNull() ?: return Found.NotFound
-        return if (best.score >= 0.6) Found.Ok(best.contact) else Found.NotFound
+        return when {
+            best.score >= 0.9 -> Found.Ok(best.contact)
+            best.score >= 0.62 -> Found.Unsure(best.contact)
+            else -> Found.NotFound
+        }
     }
 
     private fun messageTo(name: String, text: String?, platform: Platform): Reply {
@@ -301,7 +364,13 @@ class Assistant(
         }
         return when (val f = resolve(name)) {
             Found.NoPermission -> Reply("Pehle contacts ki permission de do, phir dobara bolo.")
-            Found.NotFound -> Reply("\"${Roman.readable(name)}\" naam ka contact nahi mila, naam ek baar phir bolo na.", "no_contact")
+            Found.NotFound -> Reply("\"${Roman.readable(name)}\" naam ka contact nahi mila, naam confirm karke bolo.", "no_contact")
+            is Found.Unsure ->
+                ask(
+                    Pending.ConfirmContact(f.contact, text, platform, isCall = false),
+                    "Exact wahi naam nahi mila. Kya aap \"${f.contact.name}\" ko bhejna chahte ho? Haan bolo, ya sahi naam batao.",
+                    "no_contact",
+                )
             is Found.Ok ->
                 if (text.isNullOrBlank()) {
                     ask(Pending.NeedText(f.contact, platform), "${f.contact.name} ko kya message bhejna hai?", "ask_text")
@@ -374,9 +443,18 @@ class Assistant(
     private fun callTo(name: String): Reply =
         when (val f = resolve(name)) {
             Found.NoPermission -> Reply("Pehle contacts ki permission de do, phir dobara bolo.")
-            Found.NotFound -> Reply("\"${Roman.readable(name)}\" naam ka contact nahi mila, naam ek baar phir bolo na.", "no_contact")
-            is Found.Ok -> Reply("${f.contact.name} ko call laga diya.", "calling", { actions.call(f.contact.number) })
+            Found.NotFound -> Reply("\"${Roman.readable(name)}\" naam ka contact nahi mila, naam confirm karke bolo.", "no_contact")
+            is Found.Unsure ->
+                ask(
+                    Pending.ConfirmContact(f.contact, null, Platform.ANY, isCall = true),
+                    "Exact wahi naam nahi mila. Kya \"${f.contact.name}\" ko call karun? Haan bolo, ya sahi naam batao.",
+                    "no_contact",
+                )
+            is Found.Ok -> doCall(f.contact)
         }
+
+    private fun doCall(contact: Contact): Reply =
+        Reply("${contact.name} ko call laga diya.", "calling", { actions.call(contact.number) })
 
     // --- Alarm / Time helpers ---------------------------------------------------------------
 
@@ -415,6 +493,10 @@ class Assistant(
     }
 
     companion object {
+        // Play Store / app ke button jin par tap karna hai (chhote letters me)
+        val INSTALL_LABELS = setOf("install", "get", "update", "इंस्टॉल", "इंस्टाल", "download", "डाउनलोड")
+        val OPEN_LABELS = setOf("open", "play", "खोलें", "ओपन", "launch")
+
         private val JOKES = listOf(
             "Teacher: Batao, sabse zyada barf kahan girti hai? Student: Ji, gole wale ki dukaan pe!",
             "Papa: Beta, phone chhodo aur padhai karo. Beta: Papa, padhai bhi toh phone pe hi ho rahi hai, YouTube pe!",

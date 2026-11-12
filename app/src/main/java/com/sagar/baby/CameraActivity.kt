@@ -175,6 +175,7 @@ class CameraActivity : AppCompatActivity() {
                 lastUri = output.savedUri
                 output.savedUri?.let { thumb.setImageURI(it) }
                 speaker.say("Photo kheench li, gallery me save ho gayi.", "photo_done")
+                History.log(this@CameraActivity, if (front) "🤳" else "📸", if (front) "Selfie li" else "Photo li", name)
                 if (auto) handler.postDelayed({ if (!isFinishing) finish() }, 2600)
             }
 
