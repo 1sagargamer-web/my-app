@@ -116,7 +116,7 @@ class MainActivity : AppCompatActivity(), VoiceListener.Callback {
     }
 
     private fun handleIntent(intent: Intent?) {
-        if (intent?.getBooleanExtra(EXTRA_SENT, false) == true) {
+        if (intent != null && intent.getBooleanExtra(EXTRA_SENT, false)) {
             intent.removeExtra(EXTRA_SENT)
             respond(Reply("Message भेज दिया गया।"))
         }

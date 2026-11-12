@@ -49,6 +49,8 @@ class CommandParserTest {
         assertEquals(SendMessage("Rahul", "hi", Platform.WHATSAPP), p("send hi to Rahul on WhatsApp"))
         assertEquals(SendMessage(null, null, Platform.ANY), p("message bhejo"))
         assertEquals(SendMessage("Priya", "good night", Platform.WHATSAPP), p("whatsapp pe Priya ko good night bhej do"))
+        assertEquals(SendMessage("9876543210", "hello", Platform.ANY), p("9876543210 par message bhejo hello"))
+        assertEquals(SendMessage("मम्मी", "खाना खा लिया", Platform.WHATSAPP), p("मम्मी को व्हाट्सएप पर मैसेज भेजो कि खाना खा लिया"))
     }
 
     @Test fun calls() {

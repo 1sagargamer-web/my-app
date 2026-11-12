@@ -204,7 +204,15 @@ class Assistant(
         Command.WhoAreYou -> Reply("मैं Baby हूँ, आपकी अपनी AI assistant। आप जो बोलें, वो काम हो जाएगा।")
         Command.Joke -> Reply(JOKES.random())
         Command.Thanks -> Reply(listOf("आपका स्वागत है! और कुछ?", "कोई बात नहीं! और बताइए?").random())
-        is Command.Unknown -> Reply("माफ़ कीजिए, समझ नहीं आया: \"${cmd.text}\"। Help बोलकर देखिए क्या-क्या हो सकता है।")
+        is Command.Unknown -> unknown(cmd.text)
+    }
+
+    private fun unknown(text: String): Reply {
+        // Sirf app ka naam bola ho ("Instagram") to khol do
+        if (text.trim().split(Regex("\\s+")).size <= 3) {
+            actions.apps.find(text)?.let { app -> return Reply("${app.label} खुल रहा है।", { actions.launch(app) }) }
+        }
+        return Reply("माफ़ कीजिए, समझ नहीं आया: \"$text\"। Help बोलकर देखिए क्या-क्या हो सकता है।")
     }
 
     // --- Apps / Camera ----------------------------------------------------------------------

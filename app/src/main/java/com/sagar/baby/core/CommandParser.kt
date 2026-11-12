@@ -247,7 +247,14 @@ object CommandParser {
     }
 
     private fun parseMessageOrCall(t: List<Tok>): Command? {
-        val koIdx = t.indexOfFirst { it.n == "ko" }
+        var koIdx = t.indexOfFirst { it.n == "ko" }
+        if (koIdx < 0) {
+            // "9876543210 par message bhejo ..." - number ke baad "par/pe" ko "ko" jaisa maano
+            val i = t.indexOfFirst { it.n in set("pe", "par", "pr", "per") }
+            if (i >= 1 && t.subList(0, i).all { x -> x.n.all { it.isDigit() } } &&
+                t.subList(0, i).sumOf { it.n.length } >= 7
+            ) koIdx = i
+        }
 
         if (koIdx >= 1) {
             val before = t.subList(0, koIdx)
