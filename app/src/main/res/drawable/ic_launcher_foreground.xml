@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- glow ring -->
+    <path android:strokeColor="#5500E5FF" android:strokeWidth="3"
+        android:pathData="M54,26a28,28 0,1 1,0 56a28,28 0,1 1,0 -56z" />
+    <!-- orb -->
+    <path android:pathData="M54,32a22,22 0,1 1,0 44a22,22 0,1 1,0 -44z">
+        <aapt:attr xmlns:aapt="http://schemas.android.com/aapt" name="android:fillColor">
+            <gradient android:type="radial" android:centerX="46" android:centerY="46"
+                android:gradientRadius="30"
+                android:startColor="#FFB3F5FF" android:centerColor="#FF00B8FF" android:endColor="#FF5B2BD9" />
+        </aapt:attr>
+    </path>
+    <!-- sound wave -->
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M44,49h3v10h-3z M50,44h3v20h-3z M56,46h3v16h-3z M62,50h3v8h-3z" />
+</vector>

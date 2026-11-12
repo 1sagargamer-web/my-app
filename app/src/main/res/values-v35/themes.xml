@@ -1,0 +1,12 @@
+<resources>
+    <style name="Theme.Baby" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">@color/accent</item>
+        <item name="colorSecondary">@color/accent2</item>
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:textColor">@color/text</item>
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+    </style>
+    <style name="Theme.Baby.Fullscreen">
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+</resources>

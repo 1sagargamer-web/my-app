@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Baby AI</string>
+    <string name="accessibility_label">Baby AI – WhatsApp Auto Send</string>
+    <string name="accessibility_desc">Isse Baby AI aapke bole hue WhatsApp message ko khud "Send" button dabakar bhej deti hai. Yeh sirf WhatsApp ke andar, sirf tab kaam karta hai jab aap Baby ko message bhejne ko bolte ho.</string>
+</resources>

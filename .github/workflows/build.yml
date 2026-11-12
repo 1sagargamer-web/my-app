@@ -1,0 +1,46 @@
+name: Build APK
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Unit tests
+        run: ./gradlew --no-daemon testDebugUnitTest
+
+      - name: Build APK
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Rename APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk BabyAI.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BabyAI-apk
+          path: BabyAI.apk
+
+      - name: Publish release (phone se seedha download ke liye)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Baby AI (build ${{ github.run_number }})
+          body: |
+            Phone par **BabyAI.apk** download karke install karein.
+            Branch: ${{ github.ref_name }} · Commit: ${{ github.sha }}
+          files: BabyAI.apk
+          make_latest: true
