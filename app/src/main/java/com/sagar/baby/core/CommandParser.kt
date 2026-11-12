@@ -63,6 +63,7 @@ object CommandParser {
     )
     private val CALL = set("call", "kol", "phone", "fon", "dial", "calling")
     private val CALLV = set("karo", "kar", "kro", "lagao", "laga", "milao", "mila", "do", "kijiye", "karna", "kardo", "lagado")
+    private val YE = set("ye", "yeh", "yah", "this", "yahi")
     private val KI = set("ki", "ke", "k", "that", "saying")
     private val POSTP = set("pe", "par", "pr", "pai", "me", "mein", "men", "se", "ka", "ki", "ke", "ko", "on", "in", "at", "via", "using", "per")
     private val TRAIL = set(
@@ -155,7 +156,67 @@ object CommandParser {
         return t.isNotEmpty() && t.size <= 5 && t.any { it.n in NO }
     }
 
-    fun parse(text: String): Command {
+    /** Contact ka yeh naam matlab: jo WhatsApp chat abhi screen par khuli hai. */
+    const val CURRENT_CHAT = "__current_chat__"
+
+    private val THIS_CHAT = set("isko", "isse", "ise", "inko", "inhe", "isku", "iske", "isko", "ishko", "this", "him", "her")
+    private val CONJ = set("aur", "or", "and", "phir", "fir", "then", "uske", "uskebad")
+
+    /**
+     * Ek baar me kai kaam: "WhatsApp kholo aur Rahul ko message karo ki hello" -> [OpenApp, SendMessage].
+     * Message ke andar ka "aur" (ki ... ke baad) nahi toda jaata.
+     */
+    fun parseAll(text: String, strict: Boolean = false): List<Command> {
+        val t = tokenize(text)
+        val kiIdx = t.indexOfFirst { it.n in KI }
+        val limit = if (kiIdx >= 0) kiIdx else t.size
+        val cuts = (0 until limit).filter { t[it].n in CONJ && it > 0 && it < t.size - 1 }
+        if (cuts.isNotEmpty()) {
+            val segments = ArrayList<String>()
+            var start = 0
+            for (c in cuts) {
+                segments.add(t.subList(start, c).joinToString(" ") { it.raw })
+                start = c + 1
+            }
+            segments.add(t.subList(start, t.size).joinToString(" ") { it.raw })
+            val cmds = segments.filter { it.isNotBlank() }.map { parse(it, strict) }
+            if (cmds.size > 1 && cmds.none { it is Command.Unknown }) return merge(cmds)
+        }
+        return listOf(parse(text, strict))
+    }
+
+    private fun merge(cmds: List<Command>): List<Command> {
+        val out = ArrayList<Command>()
+        for (c in cmds) {
+            val prev = out.lastOrNull()
+            when {
+                // "camera kholo aur photo lo" -> ek hi photo command
+                prev is Command.TakePhoto && c is Command.TakePhoto -> {
+                    out[out.size - 1] = Command.TakePhoto(prev.front || c.front, prev.autoCapture || c.autoCapture)
+                }
+                // "WhatsApp kholo aur Rahul ko message karo" -> seedha WhatsApp message
+                prev is Command.OpenApp && c is Command.SendMessage && isPlatformName(prev.name) != null -> {
+                    val pl = isPlatformName(prev.name)!!
+                    out[out.size - 1] = c.copy(platform = if (c.platform == Platform.ANY) pl else c.platform)
+                }
+                else -> out.add(c)
+            }
+        }
+        return out
+    }
+
+    private fun isPlatformName(name: String): Platform? {
+        val n = Translit.normPhrase(name).replace(" ", "")
+        return when {
+            isWhatsApp(n) -> Platform.WHATSAPP
+            isTelegram(n) -> Platform.TELEGRAM
+            n in set("message", "messages", "sms") -> Platform.SMS
+            else -> null
+        }
+    }
+
+    /** [strict] = background mode: aam baat-cheet ko Google search mat banao. */
+    fun parse(text: String, strict: Boolean = false): Command {
         var t = tokenize(text)
         while (t.size > 1 && t[0].n in WAKE) t = t.drop(1)
         if (t.isEmpty()) return Command.Unknown(text)
@@ -175,7 +236,7 @@ object CommandParser {
             ?: (if (t.has(JOKE)) Command.Joke else null)
             ?: parseOpenApp(t)
             ?: parseChat(t)
-            ?: parseQuestion(t, text)
+            ?: (if (strict) null else parseQuestion(t, text))
             ?: Command.Unknown(text)
     }
 
@@ -246,7 +307,28 @@ object CommandParser {
         return t
     }
 
-    private fun parseMessageOrCall(t: List<Tok>): Command? {
+    private fun parseMessageOrCall(t0: List<Tok>): Command? {
+        val t = t0
+        val thisIdx = t.indexOfFirst { it.n in THIS_CHAT }
+        if (thisIdx in 0..1 && t.none { it.n == "ko" } &&
+            (t.has(SEND) || t.has(MSG) || t.has(TELL) || t.any { isPlatformTok(it) })
+        ) {
+            val after = t.subList(thisIdx + 1, t.size)
+            val kiIdx = after.indexOfFirst { it.n in KI }
+            val content = if (kiIdx >= 0) {
+                cutTrailingSend(after.subList(kiIdx + 1, after.size))
+            } else {
+                val left = stripLeft(after) {
+                    isPlatformTok(it) || it.n in POSTP || it.n in MSG || it.n in SEND || it.n in TELL ||
+                        it.n in FILLER || it.n in TRAIL || it.n in YE
+                }
+                stripRight(left) {
+                    it.n in SEND || it.n in MSG || it.n in TRAIL || it.n in POSTP || it.n in TELL || isPlatformTok(it)
+                }
+            }
+            val text = stripLeft(content) { it.n in YE }.raw()
+            return Command.SendMessage(CURRENT_CHAT, text.ifBlank { null }, Platform.WHATSAPP)
+        }
         var koIdx = t.indexOfFirst { it.n == "ko" }
         if (koIdx < 0) {
             // "9876543210 par message bhejo ..." - number ke baad "par/pe" ko "ko" jaisa maano

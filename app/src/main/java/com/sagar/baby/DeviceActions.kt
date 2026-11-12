@@ -1,7 +1,5 @@
 package com.sagar.baby
 
-import android.Manifest
-import android.app.Activity
 import android.app.SearchManager
 import android.content.ActivityNotFoundException
 import android.content.Context
@@ -16,33 +14,39 @@ import android.os.Build
 import android.provider.AlarmClock
 import android.provider.Settings
 import android.telephony.SmsManager
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.sagar.baby.core.SettingsPage
 import com.sagar.baby.core.VolumeAction
 
-/** Phone par asli kaam karne wale functions. */
-class DeviceActions(private val activity: Activity) {
+/** Phone par asli kaam karne wale functions (background service se bhi chalte hain). */
+class DeviceActions(private val ctx: Context) {
 
-    private val ctx: Context get() = activity
-    val apps = AppFinder(activity)
+    val apps = AppFinder(ctx)
 
     fun has(perm: String) = ContextCompat.checkSelfPermission(ctx, perm) == PackageManager.PERMISSION_GRANTED
 
-    /** Permission nahi hai to maango. true = pehle se hai. */
+    /** Permission nahi hai to Baby ki screen khol kar maango. true = pehle se hai. */
     fun ensure(perm: String): Boolean {
         if (has(perm)) return true
-        ActivityCompat.requestPermissions(activity, arrayOf(perm), 77)
+        start(Intent(ctx, MainActivity::class.java).putExtra(MainActivity.EXTRA_ASK_PERMS, true))
         return false
     }
 
-    private fun start(intent: Intent): Boolean = try {
-        activity.startActivity(intent)
-        true
-    } catch (e: ActivityNotFoundException) {
-        false
-    } catch (e: SecurityException) {
-        false
+    /**
+     * Activity kholo. Background se kholne ke liye Accessibility service ka context use hota hai
+     * (Android 10+ normal background service ko app kholne nahi deta).
+     */
+    private fun start(intent: Intent): Boolean {
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        AutoSendService.instance?.let { if (it.launch(intent)) return true }
+        return try {
+            ctx.startActivity(intent)
+            true
+        } catch (e: ActivityNotFoundException) {
+            false
+        } catch (e: SecurityException) {
+            false
+        }
     }
 
     // --- Apps -------------------------------------------------------------------------------
@@ -105,18 +109,15 @@ class DeviceActions(private val activity: Activity) {
     }
 
     /** WhatsApp chat khol kar message likh do. Auto-send chalu ho to service khud "Send" dabayegi. */
-    fun sendWhatsApp(number: String, text: String, countryCode: String, autoSend: Boolean): Boolean {
+    fun sendWhatsApp(number: String, text: String, countryCode: String): Boolean {
         val pkg = whatsappPackage() ?: return false
         val uri = Uri.parse("https://api.whatsapp.com/send?phone=${intlNumber(number, countryCode)}&text=${Uri.encode(text)}")
-        if (autoSend) AutoSend.arm()
-        val ok = start(Intent(Intent.ACTION_VIEW, uri).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        if (!ok) AutoSend.clear()
-        return ok
+        return start(Intent(Intent.ACTION_VIEW, uri).setPackage(pkg))
     }
 
     /** SMS seedha bhej do. false = permission nahi / fail. */
     fun sendSms(number: String, text: String): Boolean {
-        if (!ensure(Manifest.permission.SEND_SMS)) return false
+        if (!ensure(android.Manifest.permission.SEND_SMS)) return false
         return try {
             val sms: SmsManager = if (Build.VERSION.SDK_INT >= 31) {
                 ctx.getSystemService(SmsManager::class.java)
@@ -143,10 +144,10 @@ class DeviceActions(private val activity: Activity) {
     /** Call lagao (permission na ho to dialer khol do). */
     fun call(number: String): Boolean {
         val uri = Uri.parse("tel:" + Uri.encode(number))
-        if (has(Manifest.permission.CALL_PHONE)) {
+        if (has(android.Manifest.permission.CALL_PHONE)) {
             if (start(Intent(Intent.ACTION_CALL, uri))) return true
         } else {
-            ensure(Manifest.permission.CALL_PHONE)
+            ensure(android.Manifest.permission.CALL_PHONE)
         }
         return start(Intent(Intent.ACTION_DIAL, uri))
     }

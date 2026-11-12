@@ -174,13 +174,13 @@ class CameraActivity : AppCompatActivity() {
                 counting = false
                 lastUri = output.savedUri
                 output.savedUri?.let { thumb.setImageURI(it) }
-                speaker.speak("Photo खिंच गई, gallery में save हो गई है।")
+                speaker.say("Photo kheench li, gallery me save ho gayi.", "photo_done")
                 if (auto) handler.postDelayed({ if (!isFinishing) finish() }, 2600)
             }
 
             override fun onError(exception: ImageCaptureException) {
                 counting = false
-                speaker.speak("माफ़ कीजिए, photo नहीं खिंच पाई।")
+                speaker.speak("Sorry, photo nahi kheench paayi.")
                 Toast.makeText(this@CameraActivity, "Photo error: ${exception.message}", Toast.LENGTH_LONG).show()
             }
         })

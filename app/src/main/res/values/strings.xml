@@ -1,5 +1,5 @@
 <resources>
     <string name="app_name">Baby AI</string>
-    <string name="accessibility_label">Baby AI – WhatsApp Auto Send</string>
-    <string name="accessibility_desc">Isse Baby AI aapke bole hue WhatsApp message ko khud "Send" button dabakar bhej deti hai. Yeh sirf WhatsApp ke andar, sirf tab kaam karta hai jab aap Baby ko message bhejne ko bolte ho.</string>
+    <string name="accessibility_label">Baby AI – Background Control</string>
+    <string name="accessibility_desc">Isse Baby: (1) aapke bole hue WhatsApp message khud Send karti hai, (2) khuli hui chat me "isko message karo" bolne par likh kar bhejti hai, (3) background me kisi bhi app ke upar se apps/camera khol paati hai, aur (4) camera ke paas chamakti light dikhati hai. Screen ka koi data kahin bheja nahi jaata.</string>
 </resources>

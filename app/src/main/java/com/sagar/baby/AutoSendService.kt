@@ -3,20 +3,39 @@ package com.sagar.baby
 import android.accessibilityservice.AccessibilityService
 import android.content.Context
 import android.content.Intent
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 
-/** Jab Baby WhatsApp me message likh kar kholti hai, yeh service "Send" button dabati hai. */
+/** WhatsApp ka message khud bhejne ka intezaam. */
 object AutoSend {
+    private val main = Handler(Looper.getMainLooper())
     @Volatile private var until = 0L
-    fun arm() { until = System.currentTimeMillis() + 20_000 }
+    private var callback: ((Boolean) -> Unit)? = null
+    private val timeout = Runnable { done(false) }
+
+    fun arm(onResult: (Boolean) -> Unit) {
+        main.removeCallbacks(timeout)
+        callback = onResult
+        until = System.currentTimeMillis() + 15_000
+        main.postDelayed(timeout, 15_000)
+    }
+
     fun isPending() = System.currentTimeMillis() < until
-    fun clear() { until = 0L }
+
+    fun done(ok: Boolean) {
+        main.removeCallbacks(timeout)
+        until = 0L
+        val cb = callback
+        callback = null
+        cb?.let { main.post { it(ok) } }
+    }
 
     fun isEnabled(context: Context): Boolean {
+        if (AutoSendService.instance != null) return true
         val enabled = Settings.Secure.getString(
             context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
         ) ?: return false
@@ -28,7 +47,29 @@ object AutoSend {
 
 class AutoSendService : AccessibilityService() {
 
+    companion object {
+        @Volatile var instance: AutoSendService? = null
+            private set
+    }
+
     private val main = Handler(Looper.getMainLooper())
+
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        instance = this
+        Glow.refresh(this)
+    }
+
+    override fun onUnbind(intent: Intent?): Boolean {
+        instance = null
+        Glow.refresh(applicationContext)
+        return super.onUnbind(intent)
+    }
+
+    override fun onDestroy() {
+        instance = null
+        super.onDestroy()
+    }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null || !AutoSend.isPending()) return
@@ -36,33 +77,68 @@ class AutoSendService : AccessibilityService() {
         if (!pkg.startsWith("com.whatsapp")) return
         val root = rootInActiveWindow ?: return
         val send = findSend(root, pkg) ?: return
-        if (click(send)) {
-            AutoSend.clear()
-            // Thodi der baad Baby wapas aa jaaye taaki aage sun sake
-            main.postDelayed({
-                try {
-                    startActivity(
-                        Intent(this, MainActivity::class.java)
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                            .putExtra(MainActivity.EXTRA_SENT, true),
-                    )
-                } catch (_: Exception) { }
-            }, 1200)
+        if (click(send)) AutoSend.done(true)
+    }
+
+    /** Is waqt screen par kaunsa app hai. */
+    fun currentPackage(): String? = try { rootInActiveWindow?.packageName?.toString() } catch (_: Exception) { null }
+
+    fun isWhatsAppChatOpen(): Boolean {
+        val root = try { rootInActiveWindow } catch (_: Exception) { null } ?: return false
+        val pkg = root.packageName?.toString() ?: return false
+        if (!pkg.startsWith("com.whatsapp")) return false
+        return findEntry(root, pkg) != null
+    }
+
+    /** Jo WhatsApp chat khuli hai usme [text] likh kar bhej do. */
+    fun sendInCurrentChat(text: String, onResult: (Boolean) -> Unit) {
+        val root = rootInActiveWindow
+        val pkg = root?.packageName?.toString()
+        if (root == null || pkg == null || !pkg.startsWith("com.whatsapp")) { onResult(false); return }
+        val entry = findEntry(root, pkg) ?: run { onResult(false); return }
+        val args = Bundle().apply {
+            putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
         }
+        entry.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+        if (!entry.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) { onResult(false); return }
+        // Text aate hi mic button "Send" ban jaata hai
+        main.postDelayed({
+            val r = rootInActiveWindow
+            val send = r?.let { findSend(it, pkg) }
+            onResult(send != null && click(send))
+        }, 450)
+    }
+
+    /** Background se bhi app kholne ke liye (accessibility ko Android rokta nahi). */
+    fun launch(intent: Intent): Boolean = try {
+        startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        true
+    } catch (_: Exception) {
+        false
+    }
+
+    private fun findEntry(root: AccessibilityNodeInfo, pkg: String): AccessibilityNodeInfo? {
+        root.findAccessibilityNodeInfosByViewId("$pkg:id/entry").firstOrNull { it.isVisibleToUser }?.let { return it }
+        return bfs(root) { it.isEditable && it.isVisibleToUser }
     }
 
     private fun findSend(root: AccessibilityNodeInfo, pkg: String): AccessibilityNodeInfo? {
         root.findAccessibilityNodeInfosByViewId("$pkg:id/send").firstOrNull { it.isVisibleToUser }?.let { return it }
-        // Backup: "Send" naam wala button
         val labels = setOf("send", "भेजें", "भेजे", "enviar", "পাঠান", "पाठवा", "அனுப்பு")
+        return bfs(root) {
+            val d = it.contentDescription?.toString()?.trim()?.lowercase()
+            d != null && d in labels && it.isVisibleToUser
+        }
+    }
+
+    private fun bfs(root: AccessibilityNodeInfo, match: (AccessibilityNodeInfo) -> Boolean): AccessibilityNodeInfo? {
         val queue = ArrayDeque<AccessibilityNodeInfo>()
         queue.add(root)
         var visited = 0
-        while (queue.isNotEmpty() && visited < 400) {
+        while (queue.isNotEmpty() && visited < 500) {
             val n = queue.removeFirst()
             visited++
-            val desc = n.contentDescription?.toString()?.trim()?.lowercase()
-            if (desc != null && desc in labels && n.isVisibleToUser) return n
+            if (match(n)) return n
             for (i in 0 until n.childCount) n.getChild(i)?.let { queue.add(it) }
         }
         return null

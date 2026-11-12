@@ -123,4 +123,44 @@ class CommandParserTest {
         assertTrue(Fuzzy.similarity(Translit.norm("राहुल"), Translit.norm("Rahul")) >= 0.9)
         assertTrue(Fuzzy.similarity(Translit.norm("यूट्यूब"), Translit.norm("YouTube")) >= 0.75)
     }
+
+    @Test fun multiCommands() {
+        assertEquals(
+            listOf(SendMessage("Rahul", "hello", Platform.WHATSAPP)),
+            CommandParser.parseAll("WhatsApp kholo aur Rahul ko message karo ki hello"),
+        )
+        assertEquals(
+            listOf(SendMessage("राहुल", "मैं आ रहा हूँ", Platform.WHATSAPP)),
+            CommandParser.parseAll("व्हाट्सएप खोलो और राहुल को मैसेज करो कि मैं आ रहा हूँ"),
+        )
+        assertEquals(listOf(TakePhoto(false, true)), CommandParser.parseAll("camera kholo aur photo click karo"))
+        assertEquals(listOf(Torch(true), OpenApp("YouTube")), CommandParser.parseAll("torch jalao aur youtube kholo"))
+        // message ke andar ka "aur" nahi tootna chahiye
+        assertEquals(
+            listOf(SendMessage("Rahul", "khana kha lo aur so jao", Platform.ANY)),
+            CommandParser.parseAll("Rahul ko bolo ki khana kha lo aur so jao"),
+        )
+    }
+
+    @Test fun currentChat() {
+        val c = CommandParser.CURRENT_CHAT
+        assertEquals(SendMessage(c, "hello", Platform.WHATSAPP), p("isko ye message karo ki hello"))
+        assertEquals(SendMessage(c, "kal milte hain", Platform.WHATSAPP), p("isko bhejo kal milte hain"))
+        assertEquals(SendMessage(c, "मैं आ रहा हूँ", Platform.WHATSAPP), p("इसको ये मैसेज करो कि मैं आ रहा हूँ"))
+        assertEquals(SendMessage(c, null, Platform.WHATSAPP), p("isko message bhejo"))
+    }
+
+    @Test fun strictBackground() {
+        assertTrue(CommandParser.parse("tum kya kar rahe ho", strict = true) is Unknown)
+        assertTrue(CommandParser.parse("tum kya kar rahe ho") is WebSearch)
+    }
+
+    @Test fun romanOutput() {
+        assertEquals("main aa raha hoon", Roman.readable("मैं आ रहा हूँ"))
+        assertEquals("good morning", Roman.readable("गुड मॉर्निंग"))
+        assertEquals("kal milte hain", Roman.readable("कल मिलते हैं"))
+        assertEquals("khana kha liya", Roman.readable("खाना खा लिया"))
+        assertEquals("hello bhai", Roman.readable("hello भाई"))
+        assertEquals("ghar aa jao", Roman.readable("घर आ जाओ"))
+    }
 }

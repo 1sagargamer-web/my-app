@@ -2,9 +2,12 @@ package com.sagar.baby
 
 import android.Manifest
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import com.sagar.baby.core.Command
 import com.sagar.baby.core.CommandParser
 import com.sagar.baby.core.Platform
+import com.sagar.baby.core.Roman
 import com.sagar.baby.core.SettingsPage
 import com.sagar.baby.core.Translit
 import com.sagar.baby.core.VolumeAction
@@ -12,32 +15,35 @@ import java.util.Calendar
 
 /**
  * Baby ka jawab.
- * [action] bolna shuru hote hi chalta hai (jaise app kholna), [afterSpeech] bolne ke baad.
+ * [clip] = voice pack ki recording ka naam (ho to aapki awaaz me bajegi).
+ * [action] bolna shuru hote hi chalta hai, [afterSpeech] bolne ke baad. [speak] false = sirf screen par likho.
  */
 class Reply(
     val text: String,
+    val clip: String? = null,
     val action: (() -> Unit)? = null,
     val afterSpeech: (() -> Unit)? = null,
     val stopListening: Boolean = false,
+    val speak: Boolean = true,
 )
 
 class Prefs(context: Context) {
     private val sp = context.getSharedPreferences("baby", Context.MODE_PRIVATE)
-    var continuous: Boolean
-        get() = sp.getBoolean("continuous", true)
-        set(v) = sp.edit().putBoolean("continuous", v).apply()
+    private fun b(k: String, d: Boolean) = sp.getBoolean(k, d)
+    private fun setB(k: String, v: Boolean) = sp.edit().putBoolean(k, v).apply()
+
+    var babyOn: Boolean get() = b("babyOn", true); set(v) = setB("babyOn", v)
     var countryCode: String
         get() = sp.getString("cc", "91") ?: "91"
         set(v) = sp.edit().putString("cc", v.filter { it.isDigit() }.ifEmpty { "91" }).apply()
-    var useWhatsApp: Boolean
-        get() = sp.getBoolean("wa", true)
-        set(v) = sp.edit().putBoolean("wa", v).apply()
-    var hideAccessNag: Boolean
-        get() = sp.getBoolean("hideAccess", false)
-        set(v) = sp.edit().putBoolean("hideAccess", v).apply()
+    var useWhatsApp: Boolean get() = b("wa", true); set(v) = setB("wa", v)
     var language: String
         get() = sp.getString("lang", "hi-IN") ?: "hi-IN"
         set(v) = sp.edit().putString("lang", v).apply()
+    var listenDuringMedia: Boolean get() = b("media", false); set(v) = setB("media", v)
+    var muteBeep: Boolean get() = b("muteBeep", true); set(v) = setB("muteBeep", v)
+    var glow: Boolean get() = b("glow", true); set(v) = setB("glow", v)
+    var greeted: Boolean get() = b("greeted", false); set(v) = setB("greeted", v)
 }
 
 class Assistant(
@@ -47,75 +53,94 @@ class Assistant(
     private val prefs: Prefs,
 ) {
 
+    /** Baad me aane wala jawab (jaise WhatsApp message sach me chala gaya). */
+    var onAsyncReply: ((Reply) -> Unit)? = null
+
+    private val main = Handler(Looper.getMainLooper())
+
     private sealed class Pending {
         class NeedText(val contact: Contact, val platform: Platform) : Pending()
         class NeedContact(val text: String?, val platform: Platform) : Pending()
         class NeedCallContact : Pending()
-        class Confirm(
-            val contact: Contact, val others: List<Contact>, val text: String?,
-            val platform: Platform, val isCall: Boolean,
-        ) : Pending()
     }
 
     private var pending: Pending? = null
+    private var pendingTime = 0L
 
-    fun handle(alternatives: List<String>): Reply {
+    private val currentChat = Contact("is chat", CommandParser.CURRENT_CHAT)
+
+    /**
+     * [background] = Baby ki screen band hai. Tab samajh na aane wali baat par chup rehti hai (null).
+     */
+    fun handle(alternatives: List<String>, background: Boolean): Reply? {
         val text = alternatives.firstOrNull()?.trim().orEmpty()
-        if (text.isEmpty()) return Reply("कुछ सुनाई नहीं दिया, फिर से बोलिए।")
+        if (text.isEmpty()) return null
+
         val p = pending
-        if (p != null) {
+        if (p != null && System.currentTimeMillis() - pendingTime < 45_000) {
             pending = null
-            handlePending(p, text, alternatives)?.let { return it }
+            handlePending(p, text)?.let { return it }
         }
-        val cmd = alternatives.asSequence()
-            .map { CommandParser.parse(it) }
-            .firstOrNull { it !is Command.Unknown && it !is Command.WebSearch }
-            ?: CommandParser.parse(text)
-        return execute(cmd)
+        pending = null
+
+        var cmds: List<Command> = emptyList()
+        for (alt in alternatives) {
+            val c = CommandParser.parseAll(alt, strict = background)
+            if (c.none { it is Command.Unknown || it is Command.WebSearch }) { cmds = c; break }
+        }
+        if (cmds.isEmpty()) cmds = CommandParser.parseAll(text, strict = background)
+
+        if (cmds.all { it is Command.Unknown }) {
+            if (background) return null
+            return unknown(text)
+        }
+        val replies = cmds.filter { it !is Command.Unknown }.map { execute(it) }
+        return combine(replies)
+    }
+
+    /** Button se seedha command chalana (jaise "YouTube kholo"). */
+    fun handleText(text: String): Reply = handle(listOf(text), background = false) ?: unknown(text)
+
+    private fun combine(replies: List<Reply>): Reply {
+        if (replies.size == 1) return replies[0]
+        val spoken = replies.filter { it.speak }
+        return Reply(
+            text = replies.joinToString("  ") { it.text },
+            clip = spoken.lastOrNull()?.clip?.takeIf { spoken.size == 1 },
+            action = {
+                replies.forEachIndexed { i, r ->
+                    if (i == 0) r.action?.invoke() else main.postDelayed({ r.action?.invoke() }, 1300L * i)
+                }
+            },
+            afterSpeech = { replies.forEach { it.afterSpeech?.invoke() } },
+            stopListening = replies.any { it.stopListening },
+            speak = spoken.isNotEmpty(),
+        )
+    }
+
+    private fun ask(p: Pending, text: String, clip: String): Reply {
+        pending = p
+        pendingTime = System.currentTimeMillis()
+        return Reply(text, clip)
     }
 
     // ---------------------------------------------------------------------------------------
 
-    private fun handlePending(p: Pending, text: String, alternatives: List<String>): Reply? {
-        val no = CommandParser.isNo(text)
-        when (p) {
-            is Pending.NeedText -> {
-                if (no && text.split(" ").size <= 3) return Reply("ठीक है, message cancel कर दिया।")
-                return deliver(p.contact, text, p.platform)
-            }
-            is Pending.NeedContact -> {
-                if (no) return Reply("ठीक है, cancel कर दिया।")
-                return messageTo(stripKo(text), p.text, p.platform)
-            }
-            is Pending.NeedCallContact -> {
-                if (no) return Reply("ठीक है, call cancel।")
-                return callTo(stripKo(text))
-            }
-            is Pending.Confirm -> {
-                if (CommandParser.isYes(text)) {
-                    return when {
-                        p.isCall -> doCall(p.contact)
-                        p.text == null -> askText(p.contact, p.platform)
-                        else -> deliver(p.contact, p.text, p.platform)
-                    }
-                }
-                if (no) {
-                    val next = p.others.firstOrNull()
-                    if (next != null) {
-                        pending = Pending.Confirm(next, p.others.drop(1), p.text, p.platform, p.isCall)
-                        return Reply("तो क्या ${next.name} को? हाँ या ना बोलिए।")
-                    }
-                    return Reply("ठीक है, कुछ नहीं भेजा गया।")
-                }
-                // कुछ और बोला -> नया command मानो
-                return null
-            }
+    private fun handlePending(p: Pending, text: String): Reply? {
+        val cancel = CommandParser.isNo(text) && text.split(" ").size <= 3
+        if (cancel) return Reply("Theek hai, cancel kar diya.", "cancel")
+        return when (p) {
+            is Pending.NeedText -> deliver(p.contact, text, p.platform)
+            is Pending.NeedContact -> messageTo(stripKo(text), p.text, p.platform)
+            is Pending.NeedCallContact -> callTo(stripKo(text))
         }
     }
 
     private fun stripKo(s: String): String {
         val words = s.trim().split(Regex("\\s+")).toMutableList()
-        while (words.size > 1 && Translit.norm(words.last()) in setOf("ko", "ke", "ka", "se")) words.removeAt(words.size - 1)
+        while (words.size > 1 && Translit.norm(words.last()) in setOf("ko", "ke", "ka", "se", "pe", "par")) {
+            words.removeAt(words.size - 1)
+        }
         return words.joinToString(" ")
     }
 
@@ -123,43 +148,48 @@ class Assistant(
 
     private fun execute(cmd: Command): Reply = when (cmd) {
         is Command.OpenApp -> openApp(cmd.name)
-        is Command.YouTubeSearch -> Reply("YouTube पर \"${cmd.query}\" खोजा जा रहा है।", { actions.youtubeSearch(cmd.query) })
-        is Command.WebSearch -> Reply("Google पर \"${cmd.query}\" खोजा जा रहा है।", { actions.webSearch(cmd.query) })
-        is Command.Navigate -> Reply("${cmd.place} का रास्ता दिखाया जा रहा है।", { actions.navigate(cmd.place) })
-        is Command.SendMessage -> {
-            if (cmd.contact == null) {
-                pending = Pending.NeedContact(cmd.text, cmd.platform)
-                Reply("किसको message भेजना है?")
-            } else {
-                messageTo(cmd.contact, cmd.text, cmd.platform)
-            }
+        is Command.YouTubeSearch -> {
+            val q = Roman.readable(cmd.query)
+            Reply("YouTube pe \"$q\" dhoond diya!", "searching", { actions.youtubeSearch(q) })
+        }
+        is Command.WebSearch -> {
+            val q = Roman.readable(cmd.query)
+            Reply("Google pe \"$q\" dhoond diya!", "searching", { actions.webSearch(q) })
+        }
+        is Command.Navigate -> {
+            val place = Roman.readable(cmd.place)
+            Reply("$place ka rasta khol diya.", "app_open", { actions.navigate(place) })
+        }
+        is Command.SendMessage -> when {
+            cmd.contact == null -> ask(Pending.NeedContact(cmd.text, cmd.platform), "Kisko bhejna hai?", "ask_who")
+            else -> messageTo(cmd.contact, cmd.text, cmd.platform)
         }
         is Command.Call -> {
-            if (cmd.contact == null) {
-                pending = Pending.NeedCallContact()
-                Reply("किसको call करना है?")
-            } else {
-                callTo(cmd.contact)
-            }
+            if (cmd.contact == null) ask(Pending.NeedCallContact(), "Kisko call karna hai?", "ask_call")
+            else callTo(cmd.contact)
         }
         is Command.TakePhoto -> takePhoto(cmd.front, cmd.autoCapture)
         is Command.Torch -> {
             val ok = actions.torch(cmd.on)
-            Reply(if (!ok) "इस phone में torch नहीं मिली।" else if (cmd.on) "Torch जल गई।" else "Torch बंद हो गई।")
+            when {
+                !ok -> Reply("Is phone me torch nahi mili.")
+                cmd.on -> Reply("Torch jala di.", "torch_on")
+                else -> Reply("Torch band kar di.", "torch_off")
+            }
         }
         is Command.Volume -> when (cmd.action) {
-            VolumeAction.UP -> { actions.unmuteIfNeeded(); actions.volume(VolumeAction.UP); Reply("आवाज़ बढ़ा दी गई।") }
-            VolumeAction.DOWN -> { actions.volume(VolumeAction.DOWN); Reply("आवाज़ कम कर दी गई।") }
-            VolumeAction.MAX -> { actions.unmuteIfNeeded(); actions.volume(VolumeAction.MAX); Reply("आवाज़ पूरी कर दी गई।") }
-            VolumeAction.MUTE -> Reply("ठीक है, आवाज़ बंद की जा रही है।", afterSpeech = { actions.volume(VolumeAction.MUTE) })
+            VolumeAction.UP -> { actions.unmuteIfNeeded(); actions.volume(VolumeAction.UP); Reply("Awaaz badha di.", "volume_up") }
+            VolumeAction.DOWN -> { actions.volume(VolumeAction.DOWN); Reply("Awaaz kam kar di.", "volume_down") }
+            VolumeAction.MAX -> { actions.unmuteIfNeeded(); actions.volume(VolumeAction.MAX); Reply("Awaaz full kar di.", "volume_up") }
+            VolumeAction.MUTE -> Reply("Theek hai, awaaz band kar rahe hain.", afterSpeech = { actions.volume(VolumeAction.MUTE) })
         }
         is Command.Alarm -> alarm(cmd)
         is Command.Timer -> {
             if (cmd.seconds <= 0) {
-                Reply("कितने मिनट का timer? जैसे बोलिए '5 मिनट का timer लगाओ'।")
+                Reply("Kitne minute ka timer? Jaise bolo '5 minute ka timer lagao'.")
             } else {
                 val ok = actions.setTimer(cmd.seconds)
-                Reply(if (ok) "${duration(cmd.seconds)} का timer लग गया।" else "Timer वाला app नहीं मिला।")
+                if (ok) Reply("${duration(cmd.seconds)} ka timer laga diya.", "timer") else Reply("Timer wala app nahi mila.")
             }
         }
         is Command.OpenSettings -> {
@@ -170,73 +200,75 @@ class Assistant(
                 SettingsPage.DISPLAY -> "Display"
                 SettingsPage.MAIN -> "Phone"
             }
-            Reply("$name की settings खुल रही हैं।", { actions.openSettings(cmd.page) })
+            Reply("$name settings khol di.", "app_open", { actions.openSettings(cmd.page) })
         }
         Command.TellTime -> {
             val c = Calendar.getInstance()
             val h = c.get(Calendar.HOUR_OF_DAY)
             val m = c.get(Calendar.MINUTE)
-            if (m == 0) Reply("अभी ${period(h)} ${h12(h)} बजे हैं।") else Reply("अभी ${period(h)} ${h12(h)} बजकर $m मिनट हुए हैं।")
+            if (m == 0) Reply("Abhi ${period(h)} ke ${h12(h)} baje hain.")
+            else Reply("Abhi ${period(h)} ke ${h12(h)} baj kar $m minute hue hain.")
         }
         Command.TellDate -> {
             val c = Calendar.getInstance()
-            val days = listOf("रविवार", "सोमवार", "मंगलवार", "बुधवार", "गुरुवार", "शुक्रवार", "शनिवार")
-            val months = listOf("जनवरी", "फ़रवरी", "मार्च", "अप्रैल", "मई", "जून", "जुलाई", "अगस्त", "सितंबर", "अक्टूबर", "नवंबर", "दिसंबर")
+            val days = listOf("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+            val months = listOf("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
             Reply(
-                "आज ${days[c.get(Calendar.DAY_OF_WEEK) - 1]}, ${c.get(Calendar.DAY_OF_MONTH)} " +
-                    "${months[c.get(Calendar.MONTH)]} ${c.get(Calendar.YEAR)} है।",
+                "Aaj ${days[c.get(Calendar.DAY_OF_WEEK) - 1]} hai, ${c.get(Calendar.DAY_OF_MONTH)} " +
+                    "${months[c.get(Calendar.MONTH)]} ${c.get(Calendar.YEAR)}.",
             )
         }
         Command.Battery -> {
             val (pct, charging) = actions.battery()
-            Reply("बैटरी $pct प्रतिशत है" + if (charging) ", और charge हो रही है।" else "।")
+            Reply("Battery $pct percent hai" + if (charging) ", aur charge ho rahi hai." else ".")
         }
-        Command.GoHome -> Reply("Home screen पर चलते हैं।", { actions.goHome() })
+        Command.GoHome -> Reply("Home screen pe aa gaye.", "home", { actions.goHome() })
         Command.Help -> Reply(
-            "आप मुझसे बोल सकते हैं: YouTube खोलो, राहुल को message भेजो कि मैं आ रहा हूँ, " +
-                "मम्मी को call करो, photo खींचो, selfie लो, torch जलाओ, सुबह 7 बजे का alarm लगाओ, " +
-                "आवाज़ बढ़ाओ, battery कितनी है, या दिल्ली का रास्ता दिखाओ।",
+            "Aap mujhse bol sakte ho: YouTube kholo, Rahul ko message bhejo ki main aa raha hoon, " +
+                "isko message karo ki hello, Mummy ko call karo, photo kheencho, selfie lo, torch jalao, " +
+                "subah 7 baje ka alarm lagao, awaaz badhao, battery kitni hai, ya Delhi ka rasta dikhao.",
         )
-        Command.Stop -> Reply("ठीक है। ज़रूरत हो तो गोले को छूकर बुलाइए।", stopListening = true)
-        Command.Greeting -> Reply(
-            listOf("नमस्ते! बताइए, क्या करना है?", "मैं बढ़िया हूँ! आप बताइए, क्या काम है?", "हैलो! बोलिए, क्या करूँ?").random(),
-        )
-        Command.WhoAreYou -> Reply("मैं Baby हूँ, आपकी अपनी AI assistant। आप जो बोलें, वो काम हो जाएगा।")
+        Command.Stop -> Reply("Theek hai, main chup. Zarurat ho to bula lena.", "stop", stopListening = true)
+        Command.Greeting -> Reply("Main ekdum badhiya! Aap bolo, kya karna hai?", "greeting")
+        Command.WhoAreYou -> Reply("Main Baby hoon, aapki apni assistant. Jo bologe, woh ho jayega.", "who")
         Command.Joke -> Reply(JOKES.random())
-        Command.Thanks -> Reply(listOf("आपका स्वागत है! और कुछ?", "कोई बात नहीं! और बताइए?").random())
+        Command.Thanks -> Reply("Aapka swagat hai! Aur kuch?", "thanks")
         is Command.Unknown -> unknown(cmd.text)
     }
 
     private fun unknown(text: String): Reply {
         // Sirf app ka naam bola ho ("Instagram") to khol do
         if (text.trim().split(Regex("\\s+")).size <= 3) {
-            actions.apps.find(text)?.let { app -> return Reply("${app.label} खुल रहा है।", { actions.launch(app) }) }
+            actions.apps.find(text)?.let { app ->
+                return Reply("${app.label} khol diya!", "app_open", { actions.launch(app) })
+            }
         }
-        return Reply("माफ़ कीजिए, समझ नहीं आया: \"$text\"। Help बोलकर देखिए क्या-क्या हो सकता है।")
+        return Reply("Sorry, samajh nahi aaya. Ek baar phir bolo na.", "not_understood")
     }
 
     // --- Apps / Camera ----------------------------------------------------------------------
 
     private fun openApp(name: String): Reply {
         val n = Translit.norm(name.replace(" ", ""))
-        if (n in setOf("phone", "fon", "dialer", "dailar", "dialpad")) return Reply("Dialer खुल रहा है।", { actions.openDialer() })
+        if (n in setOf("phone", "fon", "dialer", "dailar", "dialpad")) return Reply("Dialer khol diya.", "app_open", { actions.openDialer() })
         if (n in setOf("camera", "kamera", "kaimra", "kemra")) return takePhoto(front = false, auto = false)
-        if (n in setOf("alarm", "alarms")) return Reply("Alarm खुल रहे हैं।", { actions.openAlarms() })
-        val app = actions.apps.find(name) ?: return Reply("\"$name\" नाम का कोई app नहीं मिला।")
-        return Reply("${app.label} खुल रहा है।", { actions.launch(app) })
+        if (n in setOf("alarm", "alarms")) return Reply("Alarms khol diye.", "app_open", { actions.openAlarms() })
+        val app = actions.apps.find(name)
+            ?: return Reply("\"${Roman.readable(name)}\" naam ka app phone me nahi mila.", "no_app")
+        return Reply("${app.label} khol diya!", "app_open", { actions.launch(app) })
     }
 
     private fun takePhoto(front: Boolean, auto: Boolean): Reply {
         if (!actions.has(Manifest.permission.CAMERA)) {
             actions.ensure(Manifest.permission.CAMERA)
-            return Reply("Camera की permission दीजिए, फिर दोबारा बोलिए।")
+            return Reply("Pehle camera ki permission de do, phir dobara bolo.")
         }
         val text = when {
-            front && auto -> "Selfie camera खुल रहा है, स्माइल कीजिए!"
-            auto -> "Camera खुल रहा है, तीन सेकंड में photo खिंचेगी।"
-            else -> "Camera खुल रहा है।"
+            front && auto -> "Selfie camera khol diya, smile karo!"
+            auto -> "Camera khol diya, smile karo! Teen second me photo aayegi."
+            else -> "Camera khol diya."
         }
-        return Reply(text, { actions.openCamera(front, auto) })
+        return Reply(text, "camera", { actions.openCamera(front, auto) })
     }
 
     // --- Contacts / Messages / Calls --------------------------------------------------------
@@ -244,110 +276,129 @@ class Assistant(
     private sealed class Found {
         object NoPermission : Found()
         object NotFound : Found()
-        class Sure(val contact: Contact) : Found()
-        class Unsure(val contact: Contact, val others: List<Contact>) : Found()
+        class Ok(val contact: Contact) : Found()
     }
 
+    /** Sabse milta-julta contact seedha chuno - koi haan/na nahi. */
     private fun resolve(name: String): Found {
         val digits = name.filter { it.isDigit() }
-        if (digits.length >= 7) return Found.Sure(Contact(digits, digits))
+        if (digits.length >= 7) return Found.Ok(Contact(digits, digits))
         if (!contacts.hasPermission()) {
             actions.ensure(Manifest.permission.READ_CONTACTS)
             return Found.NoPermission
         }
-        val matches = contacts.find(name)
-        val best = matches.firstOrNull() ?: return Found.NotFound
-        if (best.score < 0.6) return Found.NotFound
-        val close = matches.drop(1).filter { it.score >= 0.6 && it.score >= best.score - 0.04 }
-        return if (best.score >= 0.85 && close.isEmpty()) {
-            Found.Sure(best.contact)
-        } else {
-            Found.Unsure(best.contact, close.map { it.contact })
-        }
+        val best = contacts.find(name).firstOrNull() ?: return Found.NotFound
+        return if (best.score >= 0.6) Found.Ok(best.contact) else Found.NotFound
     }
 
-    private fun messageTo(name: String, text: String?, platform: Platform): Reply =
-        when (val f = resolve(name)) {
-            Found.NoPermission -> Reply("Contacts देखने की permission दीजिए, फिर दोबारा बोलिए।")
-            Found.NotFound -> Reply("\"$name\" नाम का कोई contact नहीं मिला।")
-            is Found.Unsure -> {
-                pending = Pending.Confirm(f.contact, f.others, text, platform, isCall = false)
-                Reply("क्या ${f.contact.name} को भेजना है? हाँ या ना बोलिए।")
+    private fun messageTo(name: String, text: String?, platform: Platform): Reply {
+        if (name == CommandParser.CURRENT_CHAT) {
+            return if (text.isNullOrBlank()) {
+                ask(Pending.NeedText(currentChat, Platform.WHATSAPP), "Kya message bhejna hai?", "ask_text")
+            } else {
+                deliver(currentChat, text, Platform.WHATSAPP)
             }
-            is Found.Sure -> if (text.isNullOrBlank()) askText(f.contact, platform) else deliver(f.contact, text, platform)
         }
-
-    private fun askText(contact: Contact, platform: Platform): Reply {
-        pending = Pending.NeedText(contact, platform)
-        return Reply("${contact.name} को क्या message भेजना है?")
+        return when (val f = resolve(name)) {
+            Found.NoPermission -> Reply("Pehle contacts ki permission de do, phir dobara bolo.")
+            Found.NotFound -> Reply("\"${Roman.readable(name)}\" naam ka contact nahi mila, naam ek baar phir bolo na.", "no_contact")
+            is Found.Ok ->
+                if (text.isNullOrBlank()) {
+                    ask(Pending.NeedText(f.contact, platform), "${f.contact.name} ko kya message bhejna hai?", "ask_text")
+                } else {
+                    deliver(f.contact, text, platform)
+                }
+        }
     }
 
-    private fun deliver(contact: Contact, text: String, platform: Platform): Reply {
+    private fun sentReply(name: String) =
+        Reply("Ho gaya! Maine $name ko message bhej diya. Ab aage bolo, kya karna hai?", "msg_sent")
+
+    private fun deliver(contact: Contact, rawText: String, platform: Platform): Reply {
+        val text = Roman.readable(rawText).replaceFirstChar { it.uppercase() }
+
+        // Jo chat abhi khuli hai, usi me bhejo
+        if (contact.number == CommandParser.CURRENT_CHAT) {
+            val acc = AutoSendService.instance
+                ?: return Reply("Iske liye app me 'Background Control' (Accessibility) ON karna hoga.")
+            if (!acc.isWhatsAppChatOpen()) {
+                return ask(Pending.NeedContact(rawText, Platform.WHATSAPP), "Abhi koi WhatsApp chat khuli nahi hai. Kisko bhejna hai?", "no_chat")
+            }
+            acc.sendInCurrentChat(text) { ok ->
+                onAsyncReply?.invoke(
+                    if (ok) Reply("Ho gaya! Maine message bhej diya. Ab aage bolo, kya karna hai?", "msg_sent")
+                    else Reply("Message send nahi ho paya, ek baar check kar lo.", "send_fail"),
+                )
+            }
+            return Reply("Is chat me bhej rahe hain: \"$text\"", speak = false)
+        }
+
         var p = platform
         if (p == Platform.ANY) p = if (prefs.useWhatsApp) Platform.WHATSAPP else Platform.SMS
         if (p == Platform.WHATSAPP && actions.whatsappPackage() == null) p = Platform.SMS
 
         return when (p) {
             Platform.WHATSAPP -> {
-                val auto = AutoSend.isEnabled(context)
-                val msg = if (auto) {
-                    "${contact.name} को WhatsApp पर भेजा जा रहा है: $text"
+                if (AutoSend.isEnabled(context)) {
+                    AutoSend.arm { ok ->
+                        onAsyncReply?.invoke(
+                            if (ok) sentReply(contact.name)
+                            else Reply("${contact.name} ko message send nahi ho paya, ek baar check kar lo.", "send_fail"),
+                        )
+                    }
+                    Reply("${contact.name} ko WhatsApp pe bhej rahe hain: \"$text\"", speak = false, action = {
+                        if (!actions.sendWhatsApp(contact.number, text, prefs.countryCode)) AutoSend.done(false)
+                    })
                 } else {
-                    "${contact.name} का WhatsApp chat खुल रहा है, message लिखा हुआ है, बस send दबाइए।"
+                    Reply(
+                        "WhatsApp khol diya, message likh diya hai, bas send daba do. " +
+                            "(Khud bhejne ke liye app me 'Background Control' ON karo)",
+                        "msg_typed",
+                        { actions.sendWhatsApp(contact.number, text, prefs.countryCode) },
+                    )
                 }
-                Reply(msg, { actions.sendWhatsApp(contact.number, text, prefs.countryCode, auto) })
             }
-            Platform.TELEGRAM -> Reply("Telegram खुल रहा है, ${contact.name} की chat चुन लीजिए।", { actions.shareTelegram(text) })
-            else -> {
-                if (!actions.has(Manifest.permission.SEND_SMS)) {
+            Platform.TELEGRAM -> Reply("Telegram khol diya, ${contact.name} ki chat chun lo.", "app_open", { actions.shareTelegram(text) })
+            else -> when {
+                !actions.has(Manifest.permission.SEND_SMS) -> {
                     actions.ensure(Manifest.permission.SEND_SMS)
-                    Reply("SMS भेजने की permission दीजिए, फिर दोबारा बोलिए।")
-                } else if (actions.sendSms(contact.number, text)) {
-                    Reply("${contact.name} को SMS भेज दिया गया: $text")
-                } else {
-                    Reply("SMS सीधे नहीं जा सका, SMS app खोला गया है।")
+                    Reply("Pehle SMS ki permission de do, phir dobara bolo.")
                 }
+                actions.sendSms(contact.number, text) ->
+                    Reply("Ho gaya! Maine ${contact.name} ko SMS bhej diya: \"$text\". Ab aage bolo, kya karna hai?", "msg_sent")
+                else -> Reply("SMS seedha nahi ja paya, SMS app khol diya hai.", "send_fail")
             }
         }
     }
 
     private fun callTo(name: String): Reply =
         when (val f = resolve(name)) {
-            Found.NoPermission -> Reply("Contacts देखने की permission दीजिए, फिर दोबारा बोलिए।")
-            Found.NotFound -> Reply("\"$name\" नाम का कोई contact नहीं मिला।")
-            is Found.Unsure -> {
-                pending = Pending.Confirm(f.contact, f.others, null, Platform.ANY, isCall = true)
-                Reply("क्या ${f.contact.name} को call करना है? हाँ या ना बोलिए।")
-            }
-            is Found.Sure -> doCall(f.contact)
+            Found.NoPermission -> Reply("Pehle contacts ki permission de do, phir dobara bolo.")
+            Found.NotFound -> Reply("\"${Roman.readable(name)}\" naam ka contact nahi mila, naam ek baar phir bolo na.", "no_contact")
+            is Found.Ok -> Reply("${f.contact.name} ko call laga diya.", "calling", { actions.call(f.contact.number) })
         }
-
-    private fun doCall(contact: Contact): Reply =
-        Reply("${contact.name} को call लगाया जा रहा है।", { actions.call(contact.number) })
 
     // --- Alarm / Time helpers ---------------------------------------------------------------
 
     private fun alarm(cmd: Command.Alarm): Reply {
-        if (cmd.hour < 0) return Reply("किस टाइम का alarm लगाना है? जैसे बोलिए 'सुबह 7 बजे का alarm लगाओ'।")
+        if (cmd.hour < 0) return Reply("Kitne baje ka alarm? Jaise bolo 'subah 7 baje ka alarm lagao'.")
         var hour = cmd.hour
         if (!cmd.explicitPeriod) {
             val now = Calendar.getInstance()
             val nowMin = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
             val a = hour % 12
-            val candidates = listOf(a, a + 12)
-            hour = candidates.firstOrNull { it * 60 + cmd.minute > nowMin } ?: a
+            hour = listOf(a, a + 12).firstOrNull { it * 60 + cmd.minute > nowMin } ?: a
         }
-        val ok = actions.setAlarm(hour, cmd.minute)
-        if (!ok) return Reply("Alarm वाला app नहीं मिला।")
+        if (!actions.setAlarm(hour, cmd.minute)) return Reply("Alarm wala app nahi mila.")
         val mm = if (cmd.minute == 0) "" else ":" + cmd.minute.toString().padStart(2, '0')
-        return Reply("${period(hour)} ${h12(hour)}$mm बजे का alarm लग गया।")
+        return Reply("${period(hour).replaceFirstChar { it.uppercase() }} ${h12(hour)}$mm baje ka alarm laga diya.", "alarm")
     }
 
     private fun period(h: Int) = when (h) {
-        in 4..11 -> "सुबह"
-        in 12..15 -> "दोपहर"
-        in 16..19 -> "शाम"
-        else -> "रात"
+        in 4..11 -> "subah"
+        in 12..15 -> "dopahar"
+        in 16..19 -> "shaam"
+        else -> "raat"
     }
 
     private fun h12(h: Int) = if (h % 12 == 0) 12 else h % 12
@@ -357,19 +408,19 @@ class Assistant(
         val m = (sec % 3600) / 60
         val s = sec % 60
         val parts = ArrayList<String>()
-        if (h > 0) parts.add("$h घंटे")
-        if (m > 0) parts.add("$m मिनट")
-        if (s > 0) parts.add("$s सेकंड")
+        if (h > 0) parts.add("$h ghante")
+        if (m > 0) parts.add("$m minute")
+        if (s > 0) parts.add("$s second")
         return parts.joinToString(" ")
     }
 
     companion object {
         private val JOKES = listOf(
-            "टीचर: बताओ, सबसे ज़्यादा बर्फ़ कहाँ गिरती है? स्टूडेंट: जी, गोले वाले की दुकान पर!",
-            "पापा: बेटा, फ़ोन छोड़ो और पढ़ाई करो। बेटा: पापा, पढ़ाई भी तो फ़ोन पर ही हो रही है, YouTube पर!",
-            "डॉक्टर: आपको आराम की ज़रूरत है। मरीज़: पर डॉक्टर साहब, मैं तो दिन भर सोता हूँ! डॉक्टर: तो अब रात को भी सोइए।",
-            "पप्पू: मम्मी, मैं बड़ा होकर पायलट बनूँगा। मम्मी: पहले छत पर से कपड़े तो उतार ला, ऊँचाई से डर लगता है तुझे!",
-            "दोस्त: तू इतना मोबाइल क्यों चलाता है? मैं: क्योंकि मोबाइल मुझे नहीं चलाता!",
+            "Teacher: Batao, sabse zyada barf kahan girti hai? Student: Ji, gole wale ki dukaan pe!",
+            "Papa: Beta, phone chhodo aur padhai karo. Beta: Papa, padhai bhi toh phone pe hi ho rahi hai, YouTube pe!",
+            "Doctor: Aapko aaram ki zarurat hai. Mareez: Par main toh din bhar sota hoon! Doctor: Toh ab raat ko bhi so jaiye.",
+            "Dost: Tu itna mobile kyun chalata hai? Main: Kyunki mobile mujhe nahi chalata!",
+            "Pappu: Mummy, main bada hokar pilot banunga. Mummy: Pehle chhat se kapde toh utaar la!",
         )
     }
 }
